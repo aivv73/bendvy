@@ -22,7 +22,7 @@ def executed(tick:U32,inspector:I.Instance<S.Schema>,result:Root.Application() &
     case _:Failed{"System refused"}
 def registered(result:Maybe<Root.Application()>) -> IO(Packet):
   match result:
-    case Some{app}:IO.bind(Root.Application() & App.Report<String,Unit>,Packet,Root.run(Root.prepare(app)),result => IO.pure(Packet,executed(0,I.Fresh{},result)))
+    case Some{app}:IO.pure(Packet,executed(0,I.Fresh{},Root.run(Root.prepare(app))))
     case None{}:IO.pure(Packet,Failed{"Registration refused"})
 def created(result:Setup.Initialized<S.Schema,S.components(),S.resources(),Unit>) -> IO(Packet):
   match result:
@@ -31,4 +31,4 @@ def created(result:Setup.Initialized<S.Schema,S.components(),S.resources(),Unit>
 def start(_:Unit) -> IO(Packet):created(S.create(W.factory()))
 def step(state:State) -> IO(Packet):
   match state:
-    case State{app,inspector,tick}:IO.bind(Root.Application() & App.Report<String,Unit>,Packet,Root.run(app),result => IO.pure(Packet,executed(U32.add(tick,1),inspector,result)))
+    case State{app,inspector,tick}:IO.pure(Packet,executed(U32.add(tick,1),inspector,Root.run(app)))

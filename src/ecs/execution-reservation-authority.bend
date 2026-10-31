@@ -1,5 +1,8 @@
 import Base
 
+type Granted is Data:
+  Granted{}
+
 type Grant is Data:
   NoStructural{}
   Structural{}
@@ -15,13 +18,7 @@ def qualified(context:Context) -> Permit:
   match context:
     case Context{namespace,id,Structural{}}:Authorized{namespace,id}
     case Context{_,_,NoStructural{}}:Unauthorized{}
-def member(+id:U32,ids:List<&2,U32>) -> Bool:
-  match ids:
-    case []:False{}
-    case next <> rest:Bool.or(U32.is_eq(id,next),member(id,rest))
-def authorized(permit:Permit,namespace:U32,ids:List<&2,U32>) -> Bool:
-  match permit:
-    case Unauthorized{}:False{}
-    case Authorized{actual,id}:Bool.and(U32.is_eq(actual,namespace),member(id,ids))
-def authorize_unit(context:Unit,permit:Permit,namespace:U32,ids:List<&2,U32>) -> Bool:
-  authorized(permit,namespace,ids)
+def admitted(permit:Permit,namespace:U32,identity:Maybe<&2,U32>) -> Bool:
+  match permit identity:
+    case Authorized{actual,id} Some{expected}:Bool.and(U32.is_eq(actual,namespace),U32.is_eq(id,expected))
+    case _ _:False{}

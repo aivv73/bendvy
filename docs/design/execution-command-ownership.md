@@ -1,4 +1,4 @@
-> Verification policy override (2026-10-27): semantic verification uses Bend laws only. The new non-law models, reference tests, golden outputs and check scripts have been retired at the user's direction. References below to those checks describe historical work, not current acceptance. Historical receipts remain outside the source tree; the five approved Bend helper laws do not prove the whole ECS.
+> Historical verification record (2026-10-27). The then-new models, reference tests, golden outputs, and check scripts were retired at the user's direction. References to those checks describe historical work, not current acceptance. Current verification follows [agent workflow](../agent-workflow.md). Approved helper laws do not prove the whole ECS.
 
 # Deferred command ownership
 
@@ -25,9 +25,9 @@ distinct `Owner` indexed by its complete schema and command route. Registration
 binds the canonical concrete queue and command capability before provisioning
 query grants. Runtime grants are monomorphic in that queue; the public command
 body still receives a hidden `Q` and returns its actual owner.
-`Tree.CommandLeaf` binds the physical scope to the same full schema, derives
-the deferred system ID and composes the corresponding publisher. An ordinary
-`Tree.Leaf` rejects a command owner instead of dropping its deferred inventory.
+The retained command leaf binds the full World layout to the same schema and
+derives its deferred system ID from the actual registration. Registry composition
+retains the actual command owners alongside ordinary owners.
 
 A declaration requests entity commands through a second abstract affine book `K`,
 separate from the physical scope Builder book `B`. The closed entity grant
@@ -58,9 +58,9 @@ empty admitted history beside a retained queue; its exact pending query still
 reports that queue. The lifecycle consumer checks this case, metadata/cursor
 preservation and registration-exhaustion refusal with actual affine payloads.
 
-The complete World must be reassembled before publication. Root cuts retain the
-allocator and administrative state outside gameplay scopes, so a branch cannot
-apply structural commands to a half World or duplicate allocator ownership.
+Publication receives the actual complete World. The allocator and administrative
+state remain outside the gameplay scope, so a body cannot apply structural
+commands directly or duplicate allocator ownership.
 
 ## Synchronization behavior
 
@@ -89,22 +89,14 @@ storage, checking World applicability or applying anything. It returns the actua
 scheduled owner and exact nonempty-queue status, including retained foreign
 queues omitted from the current admitted history.
 
-The planner example covers a chain, delayed synchronization across an ignored
-edge, an explicit barrier, explicit barrier reuse, an exclusive target and global
-automatic insertion suppression. Its complete output matches the expected file
-on JS and native with one and four workers using the matching Bend 2.0.35 bundle.
-The focused Rust reference also matched all eight expected observations for
-automatic, ignored, disabled and explicit synchronization over two handled-error
-runs. See `examples/parallel-commands/bevy-reference/README.md` for the source
-binding and development commands.
+Publication uses the compiled topological order of known pending systems.
+Registration-product grouping cannot change that order when automatic boundaries
+are suppressed or edges are ignored. Unknown pending IDs remain retained for
+retry and cannot trigger a publication clock advance by themselves.
 
-The ordinary consumers additionally exercise registered owners through native
-and serial schedule entry points. They observe retained affine payloads after
-handled body errors, remove/insert receipts, automatic and explicit publication
-before dependent conditions, ignored edges, final suppression and exact pending
-status for commandless bodies. Complete independent oracles match JS and native
-one/four outputs. The reviewed normal example check passes these consumers and
-intended authority refusals. Equal native outputs do not establish actual
-multiple-worker participation. These are normal development checks, not a
-canonical qualification packet. No new mathematical law has been approved or
-proved for these modules.
+The [historical verification record](https://github.com/dearlordylord/bendvy/blob/431266bac456c5e3cf2f2bbf97d512ae1e7f5a65/docs/design/execution-command-ownership.md)
+describes earlier planner, reference and backend observations. Those receipts do
+not qualify the changed sequential source. Existing consumers retain the
+handled-error, receipt, synchronization, suppression and pending-state scenarios
+for integrated qualification. No new mathematical law is approved or proved by
+this migration.

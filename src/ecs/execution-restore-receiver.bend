@@ -2,7 +2,7 @@ import Base
 import ./execution-composer-layout.bend as Layout
 import ./owner-product.bend as Product
 import ./chunk-column.bend as Column
-import ./chunk-partition.bend as Part
+import ./chunk-shape.bend as Part
 import ./entity-allocator.bend as A
 import ./world.bend as W
 import ./deferred-command.bend as Deferred

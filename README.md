@@ -18,11 +18,10 @@ A Bevy-style ECS built for [Bend 2](https://github.com/bendlang/bend), including
 The examples provide finite observations. Five approved Bend laws cover
 [pure executor helpers](docs/design/execution-law-candidates.md).
 The ordinary executor derives access planning and capabilities from the same
-declarations and retains the actual application owners between runs. Native
-execution supports compatible systems within one World and independent query
-items through Bend parallel calls. The
-[current API map](docs/reference/execution-api.md) names these entries and the
-retired transactional executor modules. The
+declarations and retains the actual application owners between runs. Systems
+and query items execute sequentially on the actual owned storage. The
+[current API map](docs/reference/execution-api.md) names these entries and their
+ownership boundaries. The
 [original mixed applications](docs/design/execution-original-applications.md)
 combine this execution with owned events, deferred commands, graphs, and passive
 inspection.

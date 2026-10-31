@@ -5,7 +5,7 @@ import ./ordinary-declaration.bend as C
 import ./persistence-declaration.bend as Decl
 import ./decode-data.bend as D
 import ./chunk-column.bend as Column
-import ./chunk-partition.bend as Partition
+import ./chunk-shape.bend as Partition
 import ./change-tick.bend as Tick
 import ./execution-query-identity.bend as Index
 import ./lifecycle.bend as Life

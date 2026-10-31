@@ -4,7 +4,7 @@ import ../../src/ecs/execution-command-buffer.bend as Buffer
 import ../../src/ecs/execution-command-permission.bend as Permission
 import ../../src/ecs/execution-reservation-bundle.bend as Bundle
 import ../../src/ecs/change-tick.bend as Tick
-import ../parallel-query/observation.bend as Text
+import ../query-systems/observation.bend as Text
 import ./schema.bend as D
 import ./gameplay.bend as G
 import ./system.bend as Step
@@ -13,28 +13,25 @@ import ./root.bend as Root
 import ../../src/ecs/execution-system.bend as Sys
 import ../../src/ecs/execution-command-system.bend as Cmd
 import ../../src/ecs/execution-command-local.bend as Local
-import ../../src/ecs/execution-parallel-scope.bend as Scope
-import ../../src/ecs/execution-resource-query-leaf.bend as Leaf
-import ../../src/ecs/execution-resource-query-execution.bend as Execution
-import ../../src/ecs/execution-resource-admission.bend as Admission
-import ../../src/ecs/execution-compiled-binding.bend as Binding
-import ../../src/ecs/execution-prepared.bend as Prep
+import ../../src/ecs/execution-retained-system.bend as Retained
 import ../../src/ecs/execution-declaration.bend as Decl
-import ../../src/ecs/owner-product.bend as Product
-import ../../src/ecs/execution-parallel-root-application.bend as Scheduled
+import ../../src/ecs/dependency-registration.bend as Product
+import ../../src/ecs/execution-schedule.bend as Scheduled
 import ../../src/ecs/dependency-application.bend as App
 
 def rebuilt(~Owner:Type,~Node:Type,~Out:Data,rebuild:Owner -> Node,result:Owner & Out) -> Node & Out:
   match result:
     case (owner,out):(rebuild(owner),out)
-def node(~Compilation:Type,~World:Type,~Owner:Type,~Evidence:Data,~Permit:Data,~Out:Data,update:Owner -> Owner & Out,held:Leaf.Node<Compilation,World,Owner,Evidence,Permit>) -> Leaf.Node<Compilation,World,Owner,Evidence,Permit> & Out:
-  match held:
-    case Leaf.Uninspected{Scope.CompiledBinding{compilation,owner}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,~Out,owner=>Leaf.Uninspected{Scope.CompiledBinding{compilation,owner}},update(owner))
-    case Leaf.Inspected{Scope.CompiledBinding{compilation,owner},evidence,id,valid}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,~Out,owner=>Leaf.Inspected{Scope.CompiledBinding{compilation,owner},evidence,id,valid},update(owner))
-    case Leaf.Prepared{Execution.HeldReady{Binding.Binding{compilation,Prep.Prepared{namespace,owner,permits,provenance},evidence}}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,~Out,owner=>Leaf.Prepared{Execution.HeldReady{Binding.Binding{compilation,Prep.Prepared{namespace,owner,permits,provenance},evidence}}},update(owner))
-    case Leaf.Prepared{Execution.HeldInventory{compilation,Prep.Inventory{owner,provenance},evidence}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,~Out,owner=>Leaf.Prepared{Execution.HeldInventory{compilation,Prep.Inventory{owner,provenance},evidence}},update(owner))
+def node(~Compilation:Type,~Owner:Type,~Out:Data,update:Owner -> Owner & Out,held:Retained.CompiledBinding<Compilation,Owner>) -> Retained.CompiledBinding<Compilation,Owner> & Out:
+  Retained.map_owner(Compilation,Owner,Out,update,held)
 def SpawnOwner() -> Type:Cmd.System(~D.Schema,~Step.C(),~Step.R(),~Unit,~D.components(),~D.resources(),~Spawn.route(),~Spawn.Ops,~Spawn.User,~String,~Unit,~Spawn.declaration,~Spawn.body)
 def StepOwner() -> Type:Cmd.System(~D.Schema,~Step.C(),~Step.R(),~Unit,~D.components(),~D.resources(),~Step.route(),~Step.Ops,~Step.User,~String,~Unit,~Step.declaration,~Step.body)
+def spawn_update(~Out:Data,update:SpawnOwner() -> SpawnOwner() & Out,owner:Root.Owner()) -> Root.Owner() & Out:
+  match owner:
+    case Cmd.Owner{owner}:rebuilt(~SpawnOwner(),~Root.Owner(),~Out,owner=>Cmd.Owner{owner},update(owner))
+def step_update(~Out:Data,update:StepOwner() -> StepOwner() & Out,owner:Root.Peer()) -> Root.Peer() & Out:
+  match owner:
+    case Cmd.Owner{owner}:rebuilt(~StepOwner(),~Root.Peer(),~Out,owner=>Cmd.Owner{owner},update(owner))
 def seeded(seeds:List<&2,G.Body>,owner:SpawnOwner()) -> SpawnOwner() & Unit:
   match owner:
     case Sys.Owner{namespace,id,name,access,cursor,Local.Local{Spawn.User{prior,handles,returned,player},commands,permission}}:(Sys.Owner{namespace,id,name,access,cursor,Local.Local{Spawn.User{List.append(&2,G.Body,prior,seeds),handles,returned,player},commands,permission}},Unit{})
@@ -45,23 +42,23 @@ def observed(owner:StepOwner()) -> StepOwner() & List<&2,G.Row>:
   match owner:
     case Sys.Owner{namespace,id,name,access,cursor,Local.Local{Step.User{active,args,+rows},commands,permission}}:(Sys.Owner{namespace,id,name,access,cursor,Local.Local{Step.User{active,args,rows},commands,permission}},rows)
 def spawn_node(seeds:List<&2,G.Body>,held:Spawn.Node()) -> Spawn.Node() & Unit:
-  node(~Root.Compilation(),~D.World(),~SpawnOwner(),~Admission.Evidence<D.Schema,D.components(),D.resources(),Step.C(),Step.R(),Cmd.ScopedOps(~D.Schema,~D.components(),~D.resources(),~Spawn.route(),~Spawn.Ops),Cmd.program_for_buffer(~D.Schema,~Step.C(),~Step.R(),~D.components(),~D.resources(),~Spawn.route(),~Spawn.Ops,~Spawn.declaration)>,~Prep.Permit<D.Schema,D.Columns()>,~Unit,seeded(seeds),held)
+  node(~Root.Compilation(),~Root.Owner(),~Unit,spawn_update(~Unit,seeded(seeds)),held)
 def step_node(args:G.Args,held:Step.Node()) -> Step.Node() & Unit:
-  node(~Root.PeerCompilation(),~D.World(),~StepOwner(),~Admission.Evidence<D.Schema,D.components(),D.resources(),Step.C(),Step.R(),Cmd.ScopedOps(~D.Schema,~D.components(),~D.resources(),~Step.route(),~Step.Ops),Cmd.program_for_buffer(~D.Schema,~Step.C(),~Step.R(),~D.components(),~D.resources(),~Step.route(),~Step.Ops,~Step.declaration)>,~Prep.Permit<D.Schema,D.Columns()>,~Unit,configured(args),held)
+  node(~Root.PeerCompilation(),~Root.Peer(),~Unit,step_update(~Unit,configured(args)),held)
 def step_rows(held:Step.Node()) -> Step.Node() & List<&2,G.Row>:
-  node(~Root.PeerCompilation(),~D.World(),~StepOwner(),~Admission.Evidence<D.Schema,D.components(),D.resources(),Step.C(),Step.R(),Cmd.ScopedOps(~D.Schema,~D.components(),~D.resources(),~Step.route(),~Step.Ops),Cmd.program_for_buffer(~D.Schema,~Step.C(),~Step.R(),~D.components(),~D.resources(),~Step.route(),~Step.Ops,~Step.declaration)>,~Prep.Permit<D.Schema,D.Columns()>,~List<&2,G.Row>,observed,held)
-def nodes_updated(left:Spawn.Node() & Unit,right:Step.Node() & Unit) -> Root.Nodes():
+  node(~Root.PeerCompilation(),~Root.Peer(),~List<&2,G.Row>,step_update(~List<&2,G.Row>,observed),held)
+def nodes_updated(routing:List<&2,U32>,left:Spawn.Node() & Unit,right:Step.Node() & Unit) -> Root.Nodes():
   match left right:
-    case (left,_),(right,_):Product.Owner{left,right}
+    case (left,_),(right,_):Product.Product{left,right,routing}
 def configure(seeds:List<&2,G.Body>,args:G.Args,app:Root.Application()) -> Root.Application():
   match app:
-    case Scheduled.Scheduled{App.State{world,Product.Owner{left,right},guards,handler,stateBindings},plan,bindings,rules,deferred}:Scheduled.Scheduled{App.State{world,nodes_updated(spawn_node(seeds,left),step_node(args,right)),guards,handler,stateBindings},plan,bindings,rules,deferred}
+    case Scheduled.Scheduled{App.State{world,Product.Product{left,right,routing},guards,handler,stateBindings},plan,bindings,deferred}:Scheduled.Scheduled{App.State{world,nodes_updated(routing,spawn_node(seeds,left),step_node(args,right)),guards,handler,stateBindings},plan,bindings,deferred}
 def returned(rebuild:Step.Node() -> Root.Application(),result:Step.Node() & List<&2,G.Row>) -> Root.Application() & List<&2,G.Row>:
   match result:
     case (right,rows):(rebuild(right),rows)
 def rows(app:Root.Application()) -> Root.Application() & List<&2,G.Row>:
   match app:
-    case Scheduled.Scheduled{App.State{world,Product.Owner{left,right},guards,handler,stateBindings},plan,bindings,rules,deferred}:returned(right=>Scheduled.Scheduled{App.State{world,Product.Owner{left,right},guards,handler,stateBindings},plan,bindings,rules,deferred},step_rows(right))
+    case Scheduled.Scheduled{App.State{world,Product.Product{left,right,routing},guards,handler,stateBindings},plan,bindings,deferred}:returned(right=>Scheduled.Scheduled{App.State{world,Product.Product{left,right,routing},guards,handler,stateBindings},plan,bindings,deferred},step_rows(right))
 
 # Read-only fixture snapshots return the same owners and queue entries.
 def body_text(body:G.Body) -> String:
@@ -143,7 +140,7 @@ def step_snapshot(owner:StepOwner()) -> StepOwner() & String:
     case Sys.Owner{+namespace,+id,+name,+access,+cursor,Local.Local{+user,commands,+permission}}:named(~StepOwner(),~Queue(),commands=>Sys.Owner{namespace,id,name,access,cursor,Local.Local{user,commands,permission}},header(namespace,id,name,access,cursor,permission) ++ ";" ++ step_text(user) ++ ";",queue(commands))
 
 def spawn_snapshot_node(held:Spawn.Node()) -> Spawn.Node() & String:
-  node(~Root.Compilation(),~D.World(),~SpawnOwner(),~Admission.Evidence<D.Schema,D.components(),D.resources(),Step.C(),Step.R(),Cmd.ScopedOps(~D.Schema,~D.components(),~D.resources(),~Spawn.route(),~Spawn.Ops),Cmd.program_for_buffer(~D.Schema,~Step.C(),~Step.R(),~D.components(),~D.resources(),~Spawn.route(),~Spawn.Ops,~Spawn.declaration)>,~Prep.Permit<D.Schema,D.Columns()>,~String,spawn_snapshot,held)
+  node(~Root.Compilation(),~Root.Owner(),~String,spawn_update(~String,spawn_snapshot),held)
 
 def step_snapshot_node(held:Step.Node()) -> Step.Node() & String:
-  node(~Root.PeerCompilation(),~D.World(),~StepOwner(),~Admission.Evidence<D.Schema,D.components(),D.resources(),Step.C(),Step.R(),Cmd.ScopedOps(~D.Schema,~D.components(),~D.resources(),~Step.route(),~Step.Ops),Cmd.program_for_buffer(~D.Schema,~Step.C(),~Step.R(),~D.components(),~D.resources(),~Step.route(),~Step.Ops,~Step.declaration)>,~Prep.Permit<D.Schema,D.Columns()>,~String,step_snapshot,held)
+  node(~Root.PeerCompilation(),~Root.Peer(),~String,step_update(~String,step_snapshot),held)

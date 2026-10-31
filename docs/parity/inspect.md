@@ -340,7 +340,7 @@ sibling owners and stamp. Their access descriptions come from that same selector
 `Scheduled` owner, retaining system captures, guards, handler, both bindings lists,
 plan, rules and deferred-command state outside the Inspector frame.
 
-The ordinary entry `examples/parallel-inspection/passive-resource.bend` reads an
+The ordinary entry `examples/system-inspection/passive-resource.bend` reads an
 actual Array resource through success and body-error paths. Its observed clock
 and Inspector cursor remain zero, with payload and cached view both 71. This
 finite observation does not prove passive behavior universally or complete #93.
@@ -348,7 +348,7 @@ The registered application and other existing domain consumers below extend that
 finite scope. Their evidence remains source-bound; this does not approve new
 laws or establish universal inspection purity.
 
-`examples/parallel-inspection/scheduled.bend` carries passive resource reads
+`examples/system-inspection/scheduled.bend` carries passive resource reads
 through the registered replacement App before two actual runs on each returned
 application. The original four cases use two nominal schemas, serial and native
 executor modes, and observation disabled or enabled. Its retaining observer prints
@@ -388,14 +388,14 @@ through the exact full-origin column lens, and reads canonical lifecycle stamps.
 Required, optional, added and changed Inspector selection uses the unchanged row
 selection functions. Check exposes only required or optional plain rows.
 
-The ordinary `examples/parallel-inspection/component.bend` creates and activates
+The ordinary `examples/system-inspection/component.bend` creates and activates
 an actual handle, stores an Array component, enumerates it twice passively, and
 runs a Check query. Both Inspector reads report the same added/changed flags;
 Check returns true, the World clock remains zero, and the final actual payload
 owner contains 7. This finite observation does not cover foreign/stale handles,
 registered component-query captures or prove universal owner preservation.
 
-The ordinary `examples/parallel-inspection/events.bend` uses a canonical owned
+The ordinary `examples/system-inspection/events.bend` uses a canonical owned
 event Family with an Array payload and an actually registered opaque Reader.
 Passive Inspector success and body-error paths and a Check read the cached event
 view without receiving that Reader. The returned Family retains its actual
@@ -453,7 +453,7 @@ guard and handler owners, both bindings lists, plan, rules and deferred state
 outside the Check frame. Calling this operation does not turn it into a scheduled
 condition or change which systems the application will run.
 
-The ordinary `examples/parallel-inspection/pending-relations.bend` executes a
+The ordinary `examples/system-inspection/pending-relations.bend` executes a
 registered command body with final application disabled. Five actual hierarchy
 operations and no receipts remain unchanged across a passive protected-graph
 read. A subsequent ordinary run applies those retained operations together with
@@ -463,7 +463,7 @@ Check returns true. The actual resource state and captured Session remain 401
 and 601. These finite observations do not cover pending affine spawn bundles,
 all generic command payloads, relation failure readers or formal preservation.
 
-`examples/parallel-inspection/pending-spawn.bend` reuses the original AppB
+`examples/system-inspection/pending-spawn.bend` reuses the original AppB
 registration, three actual reservation tasks, explicit flush and raw-owner
 readers. Before publication, the canonical command snapshot lists three Spawn
 handles and no receipts. The original raw-owner reader sees all three retained
@@ -477,8 +477,8 @@ remains current `1`, pending `2`, revision `0` throughout. This ordinary finite
 run covers pending affine Spawn transport; it does not prove generic owner
 preservation or cover refused Spawn bundles and relation failure readers.
 
-`examples/parallel-inspection/failure-reader.bend` reuses the actual registered
-and restored application from `parallel-persistence/extended-resume.bend`. Its
+`examples/system-inspection/failure-reader.bend` reuses the actual registered
+and restored application from `system-persistence/extended-resume.bend`. Its
 receiver history contains one real refused self-relation. The original opaque
 failure Reader remains in the actual affine handler, together with its capture,
 while passive Inspector and Check read the protected cached graph. Before and

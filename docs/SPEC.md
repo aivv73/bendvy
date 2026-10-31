@@ -27,27 +27,50 @@ or Autoresearch merely because feature work has finished. The prior numeric goal
 are deferred research history; a future campaign needs agreed targets and budget.
 
 
-## Ordinary execution replacement, user amendment, 2026-10-26 UTC
+## Sequential execution, user amendment, 2026-10-31 UTC
 
-[Issue #77](https://github.com/dearlordylord/bendvy/issues/77) records the user's
-replacement direction. It governs the ordinary execution work in #78 through #94
-and supersedes conflicting rollback, stop-on-first-error, globally ordered
-traversal, and no-final-flush policies below and in earlier capability contracts.
-Earlier evidence retains its original source and contract. This amendment defines
-the target behavior; it does not establish implementation or qualification.
+The user requests one sequential ordinary executor and a simpler structure.
+Retain the completed ownership, authority, nontransactional error, lifecycle,
+command, event, relation, machine, inspection, and persistence contracts from
+the replacement below. Replace the execution substrate rather than restoring
+the historical transactional API. Ordinary callers declare their access once
+and retain the actual returned application for subsequent updates.
+
+Execution transfers the complete admitted state to one system at a time.
+Queries use direct sequential access to the actual owned columns. Required
+dependencies, condition outcomes, error handling, deferred synchronization,
+and admission checks remain explicit. Retain safe reservation and owner recovery.
+Remove the parallel executor, task policies, fork drivers, and storage
+split/rejoin machinery introduced solely for concurrent execution. Migrate
+consumers and delete superseded APIs together. There is one supported path.
+
+The earlier concurrency delivery is historical evidence, not a current feature
+or acceptance requirement. Numerical investigations do not establish a speedup
+without evidence for the actual consumer and artifact. Preserve their failures
+and limitations in the retrospective outside production execution paths.
+
+Verify the sequential ordinary entry and affected capability consumers on their
+required backends. Existing exact law approvals retain their original subjects;
+a changed subject requires reconciliation, not a silent claim of proof reuse.
+The publication freeze remains in force until explicitly lifted.
+
+## Shared ordinary execution contracts
+
+[Issue #77](https://github.com/dearlordylord/bendvy/issues/77) and its #78–94
+capability deliveries introduced the shared contracts retained below. The
+sequential amendment governs their implementation. Earlier evidence retains
+its original source and contract; it does not qualify a changed executor.
 
 The ordinary App entry must derive planning and capabilities from the same access
-declarations. It owns partition, execution, and reassembly of actual affine storage,
+declarations. It owns execution of actual affine storage,
 resources, Local, and captures. Applications do not manually split their World or
 supply a separate access catalog. Support arbitrary affine `Type` payloads and
 unlike nominal schemas. Validate independently owned storage chunks, aligned
 families, sparse membership, and growth before freezing the representation.
 
-Provide native CPU parallelism between compatible systems in one World and within
-independent query items through Bend parallel calls. Keep sequential traversal and
-explicit ordering for dependent algorithms. Conflicting access must not overlap;
-access conflicts alone do not promise an application-specific order. JavaScript
-runs the same declared operations sequentially with an allowed observation.
+Execute systems and query items sequentially. Explicit dependencies express
+application-specific ordering; access declarations express authority.
+JavaScript and native execution follow the same ordered operations.
 Gameplay algorithms, reductions, and required ordering remain application choices.
 No GPU delivery or numerical performance campaign is authorized by this amendment.
 
@@ -64,8 +87,7 @@ Bend adaptations; a returned error does not imply rewinding their state.
 Apply deferred commands at Bevy-style dependency synchronization points and at
 ordinary final deferred application. Provide explicit suppression controls and
 barriers. Retain already-authored commands after an ordinary body error and apply
-them at the proper boundary. Task-local publications and commands do not acquire
-an invented global worker order. Preserve safe reservation and deferred spawning.
+them at the proper boundary. Preserve safe reservation and deferred spawning.
 Save remains a separate operation that refuses nonempty structural pending work
 before projection and returns the actual World and queue. A default completed
 schedule saves its applied state; intentional pending work does not trigger an
@@ -80,8 +102,8 @@ may remain only with an agreed live consumer; it does not define ordinary execut
 Acceptance requires independently derived complete public observations on
 JavaScript and native execution, actual affine-owner preservation or cleanup,
 intended compile-time authority refusals, and affected normal CI. Native evidence
-must show the ordinary single-World path reaches fork/join and multiple runtime
-workers. An imported adapter or separate-World throughput is insufficient.
+must exercise the ordinary single-World entry and its actual retained state.
+An imported adapter or a separate benchmark implementation is insufficient.
 Finite observations do not establish universal correctness. New laws still require
 drafting, falsification, approval of the specific laws, proof, and mutation checks.
 Independent Spec and Standards review remains required.
@@ -137,7 +159,7 @@ Deliver a simple reproducible CPU console simulation first. Later, validate inte
 13. As an ECS application developer, I want deferred structural commands with explicit application barriers, so that query membership changes at known boundaries.
 14. As an ECS application developer, I want Bevy-style deferred synchronization and explicit suppression controls, so that structural visibility follows the declared schedule.
 15. As an ECS application developer, I want reserved spawn handles distinguished from live entities, so that references to pending entities have defined behavior.
-16. As an ECS application developer, I want ordered traversal for dependent algorithms and parallel traversal for independent items, so that gameplay chooses its ordering requirements.
+16. As an ECS application developer, I want sequential query traversal and explicit system dependencies, so that gameplay expresses its required order through the ordinary API.
 17. As an ECS application developer, I want added and changed detection per system, so that readers independently observe relevant updates.
 18. As an ECS application developer, I want removed and despawned observations, so that cleanup does not depend on querying already-deleted data.
 19. As an ECS application developer, I want buffered events with independent reader cursors, so that one reader cannot consume another reader's events.
@@ -174,7 +196,7 @@ Deliver a simple reproducible CPU console simulation first. Later, validate inte
 - Begin with explicit typed world declarations, without a schema DSL or generator. Revisit declaration ergonomics after two schemas and a second application provide evidence.
 - Require check-time rejection of undeclared component access, cross-schema misuse and writes through read capabilities. Positive examples alone are insufficient evidence.
 - Data-only components have not been approved. Investigate Data and affine Type payloads, ownership-preserving access and direct update cost before choosing a restriction.
-- Ordinary execution now targets native single-World system and query parallelism under #77. JavaScript remains a sequential interpreter of the same declared operations.
+- Ordinary execution uses one sequential owner path on JavaScript and native backends under the 2026-10-31 amendment.
 - Define identity, reservation, liveness, query order and exhaustion behavior before fixing allocator/storage interfaces. ID reuse and physical layout remain technical choices subject to the observable contract.
 - Approved identity divergence (2026-10-03): a handle originating in another runtime world must return `MissingEntity`, even when its schema and local entity ID match a live entity. The pinned bevy-ts reference can resolve that collision to the receiving world's entity; this behavior is intentionally not preserved. Cross-schema rejection alone does not establish same-schema runtime-world isolation. World identity must originate from world creation rather than caller-selected fixture constants. ID reuse, generation/exhaustion policy and the production representation remain unresolved; this decision does not approve candidate laws or pass T05.
 - Define nontransactional owner return, read-your-writes, and error handling before fixing ordinary write APIs. Performed writes and authored commands survive returned body errors. Host IO is not automatically undone.
@@ -205,7 +227,7 @@ Deliver a simple reproducible CPU console simulation first. Later, validate inte
 5. Verify JavaScript and native ordinary storage/query/update paths against independent complete observations, including partial errors and structural churn. Reuse TS evidence only for unchanged shared contracts. Numerical comparison remains deferred.
 6. Present falsified candidate laws and proof sketches for approval. After approval, complete proofs and law-specific mutation checks; record the selected interfaces and any follow-ups.
 7. Implement and verify the simple simulation against the chosen contracts. Expand lifecycle/streams, relations/scopes, states, composition/provisioning and tooling by dependency, retaining the full parity matrix.
-8. Perform the copied canonical-defense integration when required capabilities exist. Optimize storage/cache and assess parallel compute using reproducible workloads and evidence.
+8. Perform the copied canonical-defense integration when required capabilities exist. Optimize ordinary storage and execution using reproducible workloads and evidence under the current delivery priority.
 
 The immediate agent-ready work is preparation and technical probes through candidate laws. Proofs remain gated by approval of those particular laws. A failed probe triggers redesign or an explicit requirement discussion, not an automatic scope reduction. Feature acceptance requires core contracts, applicable agreed proof obligations, public API documentation and explicit divergence records; deferred quantitative performance is tracked separately.
 

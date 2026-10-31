@@ -1,3 +1,4 @@
+import ../../../src/ecs/execution-effects.bend as Effects
 import Base
 import ./schema.bend as Schema
 import ./bodies.bend as Body

@@ -47,7 +47,7 @@ def started(settings:Initial,result:Root.Application() & App.Report<String,Unit>
     case _:Failed{"Initial ECS execution refused"}
 def registered(settings:Initial,result:Maybe<Root.Application()>) -> IO(Packet):
   match result:
-    case Some{app}:IO.bind(Root.Application() & App.Report<String,Unit>,Packet,Root.run(app),result => IO.pure(Packet,started(settings,result)))
+    case Some{app}:IO.pure(Packet,started(settings,Root.run(app)))
     case None{}:IO.pure(Packet,Failed{"System registration refused"})
 def created(settings:Initial,bodies:List<&2,G.Body>,result:Setup.Initialized<D.Schema,D.components(),D.resources(),Unit>) -> IO(Packet):
   match result:
@@ -88,7 +88,7 @@ def emit_chain(fired:Bool,emission:Emission,+px:F32,+py:F32,+count:U32) -> Emiss
 def emitted(+px:F32,+py:F32,+hp:U32,+score:U32,+kills:U32,+tick:U32,+cooldown:U32,+charge:F32,+pulseClock:U32,+chainClock:U32,+nextEnemy:U32,emission:Emission) -> IO(Packet):
   match emission:
     case Emission{app,+bodies,seeds,+nextProjectile}:
-      IO.bind(Root.Application() & App.Report<String,Unit>,Packet,Root.run(Owners.configure(seeds,G.Args{px,py,hp,tick,U32.is_le(pulseClock,1),G.impacts(bodies,bodies,[])},app)),result => IO.pure(Packet,executed(px,py,hp,score,kills,tick,G.cooled(cooldown),charge,G.reset_clock(U32.is_le(pulseClock,1),180,pulseClock),G.reset_clock(U32.is_le(chainClock,1),60,chainClock),nextEnemy,nextProjectile,result)))
+      IO.pure(Packet,executed(px,py,hp,score,kills,tick,G.cooled(cooldown),charge,G.reset_clock(U32.is_le(pulseClock,1),180,pulseClock),G.reset_clock(U32.is_le(chainClock,1),60,chainClock),nextEnemy,nextProjectile,Root.run(Owners.configure(seeds,G.Args{px,py,hp,tick,U32.is_le(pulseClock,1),G.impacts(bodies,bodies,[])},app))))
 def armed(app:Root.Application(),+px:F32,+py:F32,+hp:U32,+score:U32,+kills:U32,+tick:U32,+cooldown:U32,+charge:F32,+pulseClock:U32,+chainClock:U32,+nextEnemy:U32,+nextProjectile:U32,+count:U32,+bodies:List<&2,G.Body>,seeds:List<&2,G.Body>) -> IO(Packet):
   emitted(px,py,hp,score,kills,tick,cooldown,(charge + G.shot_rate(count) / 60.0 - U32.to_f32(F32.to_u32((charge + G.shot_rate(count) / 60.0 : F32))) : F32),pulseClock,chainClock,nextEnemy,emit_chain(Bool.and(U32.is_le(chainClock,1),U32.is_lt(0,count)),emit_pulse(U32.is_le(pulseClock,1),emit_bolts(U32.to_nat(F32.to_u32((charge + G.shot_rate(count) / 60.0 : F32))),app,bodies,seeds,nextProjectile,px,py,G.target_seed(G.nearest(bodies,px,py,0,[],G.ArenaNoAim{}))),px,py),px,py,count))
 def reinforced(shouldSpawn:Bool,app:Root.Application(),+px:F32,+py:F32,+hp:U32,+score:U32,+kills:U32,+tick:U32,+cooldown:U32,+charge:F32,+pulseClock:U32,+chainClock:U32,+nextEnemy:U32,+nextProjectile:U32,+count:U32,+bodies:List<&2,G.Body>) -> IO(Packet):

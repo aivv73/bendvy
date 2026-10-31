@@ -25,12 +25,12 @@ IO finalizer. The physical family slot remains conservatively Exclusive under
 its actual canonical metadata. ReadOnly readers do not acquire payload projectors
 or Writable authority.
 
-The current consumer and independent full oracle are
-[parallel events](../../examples/parallel-events/README.md) and
-[its oracle](../../examples/parallel-events/ORACLE.md). They cover two independent
+The current [sequential event consumer](../../examples/event-systems/README.md)
+covers two independent
 readers, Data and affine payloads, two nominal schemas, handled errors, skip and
 resumption, lag, genuine foreign-log refusal, removal, retirement, shutdown, and
-reusable refused payloads. Source-current backend and final review gates for #84
+reusable refused payloads. Its current finite backend observations do not
+establish an independently derived complete oracle. Source-current backend and final review gates for #84
 must be assessed separately from the preserved historical #53 acceptance below.
 No historical receipt is evidence for an unexecuted ordinary replacement path.
 

@@ -1,25 +1,19 @@
 # Current execution evidence
 
-During the generalized Root migration, the actual JavaScript product API
-passively observed 523 bodies at setup. After 180 movement frames, it reported
-tick 180, health 5, 77 kills, 525 enemies, 14 projectile/effect rows and 550 total
-bodies. All six original
-Body kinds were present. Complete initial and final JSON observations were saved
-for the migration delivery. This run preceded the final admission/report-handling
-repair. The final migrated source was rebuilt and executed for setup and one
-frame, observing 523 bodies initially and tick 1 with 512 enemies and two
-projectile rows. The final source was not replayed for 180 frames.
+The sequential application and its existing combat fixtures pass the concrete
+source check. The stock 2.0.37 compiler emitted the game and fixture JavaScript
+modules. The existing `host-smoke.mjs` passed its keyboard, draw, pause, focus,
+tab visibility and restart checks, followed by its controlled health-bar,
+area-pulse and chain-projectile checks. Its fixture overrides now consume the
+same compiled IO protocol as the browser.
 
-This finite run demonstrates the reached application path. It does not establish
-universal correctness, native parallel qualification or new approved laws.
+This harness uses a DOM/canvas stub. It does not establish real-browser rendering,
+throughput or a native gameplay result. The separate `test.mjs` and
+`browser-smoke.mjs` retain older synchronous API assumptions and were not run.
 
-The current `check.sh` runs `build.sh` to compile the browser module. This is
-build coverage, not gameplay or browser-interaction verification. It does not
-emit the fixture module or invoke the old host checks.
+`check.sh` still runs the maintained browser build only. To exercise the host
+harness, emit both `game.bend` and `fixtures.bend` to the corresponding files in
+`dist/`, then run `node examples/arena/host-smoke.mjs` from the repository root.
 
-The preserved `test.mjs`, `host-smoke.mjs`, and `browser-smoke.mjs` use synchronous
-Packet and old World API assumptions. Their pre-migration source snapshot is
-`70b06af566abed373038d17463fbc5aaa89151a0`.
-That binding reconstructs the original source contract; it does not claim a
-qualified run at that commit. The existing Bend scenarios retain their combat
-inputs and now return the actual application's compiled IO computations.
+Earlier execution observations remain historical evidence at commit
+`431266bac`; they are not results from this sequential application.

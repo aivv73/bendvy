@@ -1,6 +1,7 @@
 // Lightweight DOM/canvas harness for the actual browser module and Bend build.
 // This checks host wiring; it is not a real-browser rendering test.
 import assert from 'node:assert/strict';
+import { runIO } from './run-io.mjs';
 const events=new Map(), documentEvents=new Map(), buttons=new Map();
 let raf;
 const ctx={
@@ -60,8 +61,8 @@ document.hidden=false;
 function useFixture(create) {
   let packet;
   const forHost=p=>({$: 'Packet',state:p.state,frame:p.frame});
-  Game.start=()=>{packet=create();return forHost(packet);};
-  Game.advance=()=>{packet=Fixture.advance(packet);return forHost(packet);};
+  Game.start=()=>next=>{packet=runIO(create({$: 'Unit'}));return next(forHost(packet));};
+  Game.advance=()=>next=>{packet=runIO(Fixture.advance(packet));return next(forHost(packet));};
   buttons.get('click')();
 }
 useFixture(Fixture.regular);

@@ -1,5 +1,4 @@
 import Base
-import ./execution-reservation-task.bend as Task
 import ./execution-command-buffer.bend as Buffer
 import ./execution-command-removed.bend as Removed
 import ./world.bend as W
@@ -100,17 +99,17 @@ type Book<-S:Data,-layout:Layout.Layout,-resources:Layout.Layout> is Type:
 type Permission is Data:
   FamilyOnly{}
   EntityStructural{}
-type EntityCommands<-Q:Type,-S:Data,-layout:Layout.Layout,-Permit:Data> is Type:
-  EntityCommands{despawn:Q -> W.Handle<S> -> Q,spawn:Q -> Removed.Removed(layout) -> Task.Task<S,Permit,Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>>}
-def EntitySelection(~S:Data,~layout:Layout.Layout,~Permit:Data,~Q:Type,~Ops:Type) -> Type:
-  @-commands:EntityCommands<Q,S,layout,Permit> -> Ops
-def Grant(~S:Data,~layout:Layout.Layout,~Permit:Data,~Q:Type,~K:Type) -> Type:
-  @-Ops:Type -> @-selection:EntitySelection(~S,~layout,~Permit,~Q,~Ops) -> K -> K & Ops
-def entity_identity(~S:Data,~layout:Layout.Layout,~Permit:Data,~Q:Type,~commands:EntityCommands<Q,S,layout,Permit>) -> EntityCommands<Q,S,layout,Permit>:commands
-def entity(~S:Data,~layout:Layout.Layout,~Permit:Data,~Q:Type,~K:Type,~grant:Grant(~S,~layout,~Permit,~Q,~K),book:K) -> K & EntityCommands<Q,S,layout,Permit>:
-  grant(EntityCommands<Q,S,layout,Permit>,entity_identity(~S,~layout,~Permit,~Q),book)
+type EntityCommands<-Q:Type,-S:Data,-layout:Layout.Layout,-Permit:Data,-F:Type -> Type> is Type:
+  EntityCommands{despawn:Q -> W.Handle<S> -> Q,spawn:Q -> Removed.Removed(layout) -> F(Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>)}
+def EntitySelection(~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,~Q:Type,~Ops:Type) -> Type:
+  @-commands:EntityCommands<Q,S,layout,Permit,F> -> Ops
+def Grant(~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,~Q:Type,~K:Type) -> Type:
+  @-Ops:Type -> @-selection:EntitySelection(~S,~layout,~Permit,~F,~Q,~Ops) -> K -> K & Ops
+def entity_identity(~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,~Q:Type,~commands:EntityCommands<Q,S,layout,Permit,F>) -> EntityCommands<Q,S,layout,Permit,F>:commands
+def entity(~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,~Q:Type,~K:Type,~grant:Grant(~S,~layout,~Permit,~F,~Q,~K),book:K) -> K & EntityCommands<Q,S,layout,Permit,F>:
+  grant(EntityCommands<Q,S,layout,Permit,F>,entity_identity(~S,~layout,~Permit,~F,~Q),book)
 def fresh(~S:Data,~layout:Layout.Layout,~resources:Layout.Layout) -> Book<S,layout,resources>:Book{FamilyOnly{},NoRelations{},no_selection(~S,~resources)}
-def grant(~S:Data,~layout:Layout.Layout,~resources:Layout.Layout,~Permit:Data,~Q:Type,~despawn:Q -> W.Handle<S> -> Q,~spawn:Q -> Removed.Removed(layout) -> Task.Task<S,Permit,Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>>,~Ops:Type,~choose:EntitySelection(~S,~layout,~Permit,~Q,~Ops),book:Book<S,layout,resources>) -> Book<S,layout,resources> & Ops:
+def grant(~S:Data,~layout:Layout.Layout,~resources:Layout.Layout,~Permit:Data,~F:Type -> Type,~Q:Type,~despawn:Q -> W.Handle<S> -> Q,~spawn:Q -> Removed.Removed(layout) -> F(Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>),~Ops:Type,~choose:EntitySelection(~S,~layout,~Permit,~F,~Q,~Ops),book:Book<S,layout,resources>) -> Book<S,layout,resources> & Ops:
   match book:
     case Book{_,relations,selection}:(Book{EntityStructural{},relations,selection},choose(EntityCommands{despawn,spawn}))
 def RelationGrant(~S:Data,~resources:Layout.Layout,~Q:Type,~K:Type) -> Type:
@@ -123,7 +122,7 @@ def ScopeGrant(~S:Data,~resources:Layout.Layout,~Q:Type,~K:Type) -> Type:
 def scope_grant(~S:Data,~layout:Layout.Layout,~resources:Layout.Layout,~Q:Type,~enqueue:Q -> Layout.Route -> ScopeCommands.Operation<S> -> Q,~route:Layout.Route,~valid:{Layout.grant_valid(~resources,~route) == True{} : Bool},~payload:{Layout.payload(resources,route) == ScopeStore.Store<S> : Type},~view:{Layout.view(resources,route) == ScopeStore.View<S> : Data},~protected:{Layout.policy(resources,route) == Policy.ProtectedLifetimeScope{S} : Policy.Policy},book:Book<S,layout,resources>) -> Book<S,layout,resources> & ScopeCommands.Commands<Q,S>:
   match book:
     case Book{_,relations,selection}:(Book{EntityStructural{},ScopeAllowed{route,valid,payload,view,protected,relations},extend_scope_selection(~S,~resources,~route,~valid,~payload,~view,~protected,selection)},ScopeCommands.provide(~S,~Q,~route,~enqueue))
-def despawn_field(~Q:Type,~S:Data,~layout:Layout.Layout,~Permit:Data,commands:EntityCommands<Q,S,layout,Permit>) -> Q -> W.Handle<S> -> Q:
+def despawn_field(~Q:Type,~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,commands:EntityCommands<Q,S,layout,Permit,F>) -> Q -> W.Handle<S> -> Q:
   match commands:
     case EntityCommands{despawn,_}:despawn
 type Prepared<-Ops:Type,-S:Data,-resources:Layout.Layout> is Type:
@@ -141,6 +140,6 @@ def ops_field(-Ops:Type,-S:Data,-resources:Layout.Layout,value:Prepared<Ops,S,re
     case Prepared{_,_,_,ops}:ops
 
 # Only a declaration that consumed the structural grant can obtain this field.
-def spawn_field(~Q:Type,~S:Data,~layout:Layout.Layout,~Permit:Data,commands:EntityCommands<Q,S,layout,Permit>) -> Q -> Removed.Removed(layout) -> Task.Task<S,Permit,Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>>:
+def spawn_field(~Q:Type,~S:Data,~layout:Layout.Layout,~Permit:Data,~F:Type -> Type,commands:EntityCommands<Q,S,layout,Permit,F>) -> Q -> Removed.Removed(layout) -> F(Q & Buffer.SpawnAdmission<S,Removed.Removed(layout)>):
   match commands:
     case EntityCommands{_,spawn}:spawn

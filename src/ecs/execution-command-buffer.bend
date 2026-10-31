@@ -1,6 +1,6 @@
 import Base
+import ./execution-effects.bend as Effects
 import ./world.bend as W
-import ./execution-reservation-task.bend as Task
 import ./execution-reservation-bundle.bend as Bundle
 import ./execution-composer-layout.bend as Layout
 import ./execution-relation-operation.bend as Operation
@@ -63,13 +63,6 @@ def remove(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>,handle:W.Handle<S>) -> B
 def despawn(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>,handle:W.Handle<S>) -> Buffer<S,P,D>:
   match buffer:
     case Buffer{pending,receipts}:Buffer{Despawn{handle} <> pending,receipts}
-# Partitioning transfers the existing queue to one worker and gives the other
-# a fresh owner. Joining transfers both queues; no command payload is copied.
-def split(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>) -> Buffer<S,P,D> & Buffer<S,P,D>:
-  (buffer,empty(~S,~P,~D))
-def merge(~S:Data,~P:Type,~D:Type,left:Buffer<S,P,D>,right:Buffer<S,P,D>) -> Buffer<S,P,D>:
-  match left right:
-    case Buffer{leftPending,leftReceipts} Buffer{rightPending,rightReceipts}:Buffer{List.append(&1,Entry<S,P,D>,rightPending,leftPending),List.append(&1,Receipt<S,P,D>,rightReceipts,leftReceipts)}
 def pending(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>) -> Buffer<S,P,D> & Bool:
   match buffer:
     case Buffer{[],receipts}:(Buffer{[],receipts},False{})
@@ -82,9 +75,9 @@ def take_receipts(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>) -> Buffer<S,P,D>
 type SpawnAdmission<-S:Data,-D:Type> is Type:
   SpawnQueued{handle:W.Handle<S>}
   SpawnRejected{bundle:D,error:W.WorldError}
-def stage(~S:Data,~P:Type,~D:Type,~Permit:Data,buffer:Buffer<S,P,D>,bundle:D,answer:W.Reservation<S>) -> Task.Task<S,Permit,Buffer<S,P,D> & SpawnAdmission<S,D>>:
+def stage(~S:Data,~P:Type,~D:Type,buffer:Buffer<S,P,D>,bundle:D,answer:W.Reservation<S>) -> Buffer<S,P,D> & SpawnAdmission<S,D>:
   match buffer answer:
-    case Buffer{pending,receipts} W.ReservationRejected{error}:Task.TDone{(Buffer{pending,receipts},SpawnRejected{bundle,error})}
-    case Buffer{pending,receipts} W.Reserved{+handle}:Task.TDone{(Buffer{Spawn{handle,bundle} <> pending,receipts},SpawnQueued{handle})}
-def spawn(~S:Data,~P:Type,~D:Type,~Permit:Data,~token:Permit,buffer:Buffer<S,P,D>,bundle:D) -> Task.Task<S,Permit,Buffer<S,P,D> & SpawnAdmission<S,D>>:
-  Task.TNeed{token,answer => stage(~S,~P,~D,~Permit,buffer,bundle,answer)}
+    case Buffer{pending,receipts} W.ReservationRejected{error}:(Buffer{pending,receipts},SpawnRejected{bundle,error})
+    case Buffer{pending,receipts} W.Reserved{+handle}:(Buffer{Spawn{handle,bundle} <> pending,receipts},SpawnQueued{handle})
+def spawn(~S:Data,~P:Type,~D:Type,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~token:Permit,~request:Permit -> F(W.Reservation<S>),buffer:Buffer<S,P,D>,bundle:D) -> F(Buffer<S,P,D> & SpawnAdmission<S,D>):
+  Effects.map(~F,W.Reservation<S>,(Buffer<S,P,D> & SpawnAdmission<S,D>),effects,request(token),answer => stage(~S,~P,~D,buffer,bundle,answer))

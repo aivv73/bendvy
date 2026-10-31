@@ -2,11 +2,12 @@ import Base
 import ./schema-fragments.bend as SF
 import ./execution-composer-layout.bend as Layout
 import ./execution-composer-schema.bend as Schema
-import ./execution-parallel-scope-registry.bend as Registry
+import ./execution-registry.bend as Registry
+import ./dependency-registration.bend as Reg
+import ./dependency-executor.bend as Exec
 import ./dependency-composer-program.bend as Scoped
 import ./dependency-composer.bend as Compose
 import ./dependency-plan.bend as Plan
-import ./owner-product.bend as Product
 
 # Recursive author metadata contains no payload owners or gameplay authority.
 # Detached feature selection metadata with named dependencies and schema
@@ -114,13 +115,13 @@ def definition_tree(~S:Data,definition:Definition<S>) -> Tree<S>:
 
 # Entries and node IDs come from the same accepted declarations that execute.
 # Scope paths retain feature boundaries before dependency edges are flattened.
-type Assembly<-S:Data,-Nodes:Type> is Type:
-  Assembly{selected:Tree<S>,facts:Registry.GeneralizedFacts<Nodes>,scope:Scoped.Scope}
+type Assembly<-S:Data,-ActualRegistry:Type> is Type:
+  Assembly{selected:Tree<S>,facts:Registry.Facts<ActualRegistry>,scope:Scoped.Scope}
 type AssemblyError is Data:
   InvalidFeatures{error:Error}
   InvalidComposition{error:Compose.Error}
-type Lowered<-Nodes:Type> is Type:
-  Lowered{facts:Registry.GeneralizedFacts<Nodes>,edges:List<&2,Plan.Edge>,invalid:Maybe<&2,AssemblyError>}
+type Lowered<-ActualRegistry:Type> is Type:
+  Lowered{facts:Registry.Facts<ActualRegistry>,edges:List<&2,Plan.Edge>,invalid:Maybe<&2,AssemblyError>}
 def needs_key(nodes:List<&2,Plan.Node<String>>,+key:String) -> Bool:
   match nodes:
     case []:False{}
@@ -133,15 +134,15 @@ def own_entries(~S:Data,entries:List<&2,SF.Entry<S>>,+nodes:List<&2,Plan.Node<St
   match entries:
     case []:[]
     case +entry <> rest:selected_entry(~S,needs_key(nodes,Compose.entry_key(~S,entry)),entry,own_entries(~S,rest,nodes))
-def from_facts(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,-Nodes:Type,name:String,dependencies:Tree<S>,facts:Registry.GeneralizedFacts<Nodes>) -> Assembly<S,Nodes>:
+def from_facts(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,~World:Type,~Nodes:Type,~Error:Data,~Out:Data,~dispatch:Nodes -> World -> U32 -> Nodes & (World & Exec.Invocation<Error,Out>),name:String,dependencies:Tree<S>,facts:Registry.Facts<Reg.Registry<World,Nodes,Error,Out,dispatch>>) -> Assembly<S,Reg.Registry<World,Nodes,Error,Out,dispatch>>:
   match facts:
-    case Registry.GeneralizedFacts{nodes,+planNodes,entries,deferred}:Assembly{Feature{name,own_entries(~S,Schema.inventory(~S,~components,~resources),planNodes),dependencies},Registry.GeneralizedFacts{nodes,planNodes,entries,deferred},Scoped.Scope{Scoped.ids(planNodes),[]}}
+    case Registry.Facts{Reg.Registry{nodes,+planNodes},deferred}:Assembly{Feature{name,own_entries(~S,Schema.inventory(~S,~components,~resources),planNodes),dependencies},Registry.Facts{Reg.Registry{nodes,planNodes},deferred},Scoped.Scope{Scoped.ids(planNodes),[]}}
 def scope_members(scope:Scoped.Scope) -> List<&2,U32>:
   match scope:
     case Scoped.Scope{members,_}:members
-def pair(~S:Data,-Left:Type,-Right:Type,left:Assembly<S,Left>,right:Assembly<S,Right>) -> Assembly<S,Product.Owner<Left,Right>>:
+def pair(~S:Data,~World:Type,~Left:Type,~Right:Type,~Error:Data,~Out:Data,~leftDispatch:Left -> World -> U32 -> Left & (World & Exec.Invocation<Error,Out>),~rightDispatch:Right -> World -> U32 -> Right & (World & Exec.Invocation<Error,Out>),left:Assembly<S,Reg.Registry<World,Left,Error,Out,leftDispatch>>,right:Assembly<S,Reg.Registry<World,Right,Error,Out,rightDispatch>>) -> Assembly<S,Reg.Registry<World,Reg.Product<Left,Right>,Error,Out,Reg.paired_dispatch(~World,~Left,~Right,~Error,~Out,~leftDispatch,~rightDispatch)>>:
   match left right:
-    case Assembly{left,lf,+ls} Assembly{right,rf,+rs}:Assembly{Sequence{left,right},Registry.generalized_pair_facts(Left,Right,lf,rf),Scoped.Scope{List.append(&2,U32,scope_members(ls),scope_members(rs)),[ls,rs]}}
+    case Assembly{left,lf,+ls} Assembly{right,rf,+rs}:Assembly{Sequence{left,right},Registry.paired(~World,~Left,~Right,~Error,~Out,~leftDispatch,~rightDispatch,lf,rf),Scoped.Scope{List.append(&2,U32,scope_members(ls),scope_members(rs)),[ls,rs]}}
 def feature_error(validation:Validation) -> Maybe<&2,AssemblyError>:
   match validation:
     case Valid{}:None{}
@@ -158,12 +159,12 @@ def nesting_error(error:Maybe<&2,Scoped.NestError>) -> Maybe<&2,Compose.Error>:
   match error:
     case None{}:None{}
     case Some{error}:Some{Compose.Nesting{error}}
-def lower_nested(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,-Nodes:Type,selected:Tree<S>,facts:Registry.GeneralizedFacts<Nodes>,nested:Scoped.Nesting) -> Lowered<Nodes>:
+def lower_nested(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,~World:Type,~Nodes:Type,~Error:Data,~Out:Data,~dispatch:Nodes -> World -> U32 -> Nodes & (World & Exec.Invocation<Error,Out>),selected:Tree<S>,facts:Registry.Facts<Reg.Registry<World,Nodes,Error,Out,dispatch>>,nested:Scoped.Nesting) -> Lowered<Reg.Registry<World,Nodes,Error,Out,dispatch>>:
   match facts nested:
-    case Registry.GeneralizedFacts{nodes,+planNodes,entries,deferred} Scoped.Nesting{edges,invalid}:Lowered{Registry.GeneralizedFacts{nodes,planNodes,entries,deferred},edges,first_error(feature_error(validate(~S,selected)),composition_error(Compose.first_error(nesting_error(invalid),Compose.first_error(Compose.schema_error(Schema.validate(~S,~components,~resources)),Compose.schedule_error(Compose.missing(~S,planNodes,Schema.inventory(~S,~components,~resources)))))))}
-def lower(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,-Nodes:Type,groups:List<&2,Scoped.Nested>,assembly:Assembly<S,Nodes>) -> Lowered<Nodes>:
+    case Registry.Facts{Reg.Registry{nodes,+planNodes},deferred} Scoped.Nesting{edges,invalid}:Lowered{Registry.Facts{Reg.Registry{nodes,planNodes},deferred},edges,first_error(feature_error(validate(~S,selected)),composition_error(Compose.first_error(nesting_error(invalid),Compose.first_error(Compose.schema_error(Schema.validate(~S,~components,~resources)),Compose.schedule_error(Compose.missing(~S,planNodes,Schema.inventory(~S,~components,~resources)))))))}
+def lower(~S:Data,~components:Layout.Layout,~resources:Layout.Layout,~World:Type,~Nodes:Type,~Error:Data,~Out:Data,~dispatch:Nodes -> World -> U32 -> Nodes & (World & Exec.Invocation<Error,Out>),groups:List<&2,Scoped.Nested>,assembly:Assembly<S,Reg.Registry<World,Nodes,Error,Out,dispatch>>) -> Lowered<Reg.Registry<World,Nodes,Error,Out,dispatch>>:
   match assembly:
-    case Assembly{selected,facts,scope}:lower_nested(~S,~components,~resources,Nodes,selected,facts,Scoped.nested(groups,scope))
+    case Assembly{selected,facts,scope}:lower_nested(~S,~components,~resources,~World,~Nodes,~Error,~Out,~dispatch,selected,facts,Scoped.nested(groups,scope))
 
 type Application<-Root:Type,-Provisions:Type> is Type:
   Application{root:Root,provisions:Provisions,invalid:Maybe<&2,AssemblyError>}
@@ -173,7 +174,7 @@ type Report<Out:Data> is Data:
 def returned(-Root:Type,-Provisions:Type,-Out:Data,provisions:Provisions,result:Root & Out) -> Application<Root,Provisions> & Report<Out>:
   match result:
     case (root,report):(Application{root,provisions,None{}},Executed{report})
-def run(-Root:Type,-Provisions:Type,-Out:Data,invoke:Root -> IO(Root & Out),application:Application<Root,Provisions>) -> IO(Application<Root,Provisions> & Report<Out>):
+def run(-Root:Type,-Provisions:Type,-Out:Data,invoke:Root -> Root & Out,application:Application<Root,Provisions>) -> Application<Root,Provisions> & Report<Out>:
   match application:
-    case Application{root,provisions,Some{+error}}:IO.pure(Application<Root,Provisions> & Report<Out>,(Application{root,provisions,Some{error}},Refused{error}))
-    case Application{root,provisions,None{}}:IO.bind(Root & Out,Application<Root,Provisions> & Report<Out>,invoke(root),value => IO.pure(Application<Root,Provisions> & Report<Out>,returned(Root,Provisions,Out,provisions,value)))
+    case Application{root,provisions,Some{+error}}:(Application{root,provisions,Some{error}},Refused{error})
+    case Application{root,provisions,None{}}:returned(Root,Provisions,Out,provisions,invoke(root))

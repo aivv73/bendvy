@@ -1,3 +1,15 @@
+This ticket records the feature capability contract. Its older delivery bullets
+below are historical where they conflict with the current [agent workflow](../agent-workflow.md)
+and [SPEC priority amendment](../SPEC.md#current-delivery-priority--user-amendment-2026-10-20-utc).
+Source checks and builds have no default wall deadline. Performance campaigns
+are deferred. Publication follows the current user instruction.
+
+The current execution contract is [sequential execution](../design/sequential-execution.md).
+Features aggregate the common registration registry and execute through the one
+sequential schedule. Their execution core is pure; host IO belongs to the caller.
+Qualification must exercise the feature's actual selected systems, dependency
+visibility and returned owners. A source check alone does not establish that behavior.
+
 ## Parent
 
 #1 — full Bend-native bevy-ts core parity.

@@ -1,3 +1,4 @@
+import ../../../src/ecs/execution-effects.bend as Effects
 import Base
 import ./schema.bend as Schema
 import ../../../src/ecs/execution-access.bend as Access

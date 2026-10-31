@@ -1,7 +1,7 @@
 # T02 — полный core: catalogue и gates
 
 For current execution entries and behavior, use the [replacement execution API](execution-api.md),
-the [SPEC replacement amendment](../SPEC.md#ordinary-execution-replacement-user-amendment-2026-10-26-utc)
+the [SPEC replacement amendment](../SPEC.md#sequential-execution-user-amendment-2026-10-31-utc)
 and [#77 with its #78–94 implementation slices](https://github.com/dearlordylord/bendvy/issues/77).
 The T02 catalogue and October 16 parity checkpoint below are historical. Their
 transactional APIs and acceptance statements retain their original source bindings;

@@ -3,13 +3,13 @@
 ## Scoped-scene execution contract
 
 Issue #89 applies the [execution-core contract](../SPEC.md) to one ordinary
-[retained scene](../../examples/parallel-linked-despawn/generalized-scene.bend).
+[retained scene](../../examples/linked-despawn-systems/generalized-scene.bend).
 The scene keeps one provisioned `World` across three updates with `finalApply`
 set to `True`, `False`, then `True`. Component values are affine `Session`
 owners. The scene uses the existing relation, hierarchy, linked-deletion, and
 lifetime-scope algorithms through their command and publication boundaries.
 
-The [application](../../examples/parallel-linked-despawn/generalized-application.bend)
+The [application](../../examples/linked-despawn-systems/generalized-application.bend)
 retains seven nodes. Its facts come from each node's actual compilation.
 
 | Node | Operation |
@@ -22,7 +22,7 @@ retains seven nodes. Its facts come from each node's actual compilation.
 | 6, lifecycle reader | Read the actual `Removed` and `Despawned` streams through `Empty`, retaining rows, cursors, and missed counts. |
 | 7, survivor updater | Move the actual pending `Session{222}` and `Session{333}` values from its local state into its command queue. |
 
-Nodes 1 and 2 enter the retained parallel scheduler as independent authors.
+Nodes 1 and 2 execute sequentially with independent retained command queues.
 The declared edges are `1 -> 3`, `2 -> 3`, `3 -> 4`, `4 -> 5`, `5 -> 6`, and
 `6 -> 7`. The `2 -> 3` edge orders conflicting deferred edits to the ordinary
 link. A deferred relation grant does not itself add a physical resource-access
@@ -30,13 +30,12 @@ recipe. The scene does not rely on automatic physical resource-conflict
 detection to order those edits.
 
 Dependency barriers publish authored commands before the corresponding readers.
-The [actors](../../examples/parallel-linked-despawn/generalized-actors.bend)
+The [actors](../../examples/linked-despawn-systems/generalized-actors.bend)
 return handled `BodyError` completions after authoring. Publication retains
 their partial effects. The
-[readers](../../examples/parallel-linked-despawn/generalized-readers.bend)
+[readers](../../examples/linked-despawn-systems/generalized-readers.bend)
 also return handled errors after consuming their streams, preserving their
-updated local state. Dependencies define this order without requiring a global
-worker order.
+updated local state. Dependencies define execution and publication order.
 
 The cleanup contract removes the child value 11 and the replacement value 33
 through linked deletion, and the separate scoped value 44 through scope cleanup.
@@ -47,14 +46,14 @@ barriers do not publish that update's pending survivor value.
 
 Source and inverse relation views remain read-only projections of the protected
 stores. Mutations use the declared source-of-truth commands. The
-[initializer](../../examples/parallel-linked-despawn/generalized-initialize.bend)
+[initializer](../../examples/linked-despawn-systems/generalized-initialize.bend)
 allocates all four handles from the actual world and registers the failure and
 lifecycle readers against that world.
 
 This section describes the consumer and its required observations. JavaScript
 and native qualification must bind the complete observation to the current
-source and an independently derived expectation. A selected parallel group or
-matching output alone does not establish that the parallel ownership path ran.
+source and an independently derived expectation. Matching backend output alone
+does not establish every required semantic observation.
 Finite observations do not establish universal correctness or add an approved
 law. The [current workflow](../agent-workflow.md) governs checks, law approvals,
 review, and publication.

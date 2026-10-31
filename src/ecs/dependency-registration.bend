@@ -1,6 +1,7 @@
 import Base
 import ./dependency-plan.bend as Plan
 import ./dependency-executor.bend as Exec
+import ./execution-owner-continuation.bend as Continuation
 
 type Registry<-World:Type,-Owners:Type,-Error:Data,-Out:Data,-dispatch:Owners -> World -> U32 -> Owners & (World & Exec.Invocation<Error,Out>)> is Type:
   Registry{owners:Owners,nodes:List<&2,Plan.Node<String>>}
@@ -16,16 +17,20 @@ def contains(ids:List<&2,U32>,+id:U32) -> Bool:
     case []:False{}
     case first <> rest:Bool.or(U32.is_eq(first,id),contains(rest,id))
 
-def left_returned(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),returned:L & (World & Exec.Invocation<Error,Out>),right:R,leftIds:List<&2,U32>) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
-  match returned:
-    case (left,(world,status)):(Product{left,right,leftIds},(world,status))
-def right_returned(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),returned:R & (World & Exec.Invocation<Error,Out>),left:L,leftIds:List<&2,U32>) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
-  match returned:
-    case (right,(world,status)):(Product{left,right,leftIds},(world,status))
+def left_returned(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),pair:(R & List<&2,U32>) & (L & (World & Exec.Invocation<Error,Out>))) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
+  match pair:
+    case ((right,leftIds),(left,(world,status))):(Product{left,right,leftIds},(world,status))
+def right_returned(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),pair:(L & List<&2,U32>) & (R & (World & Exec.Invocation<Error,Out>))) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
+  match pair:
+    case ((left,leftIds),(right,(world,status))):(Product{left,right,leftIds},(world,status))
 def paired_selected(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),selected:Bool,left:L,right:R,leftIds:List<&2,U32>,world:World,id:U32) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
   match selected:
-    case True{}:left_returned(~World,~L,~R,~Error,~Out,~leftDispatch,~rightDispatch,leftDispatch(left,world,id),right,leftIds)
-    case False{}:right_returned(~World,~L,~R,~Error,~Out,~leftDispatch,~rightDispatch,rightDispatch(right,world,id),left,leftIds)
+    case True{}:
+      continuation:Continuation.PairedHeader<(L & (World & Exec.Invocation<Error,Out>)),(Product<L,R> & (World & Exec.Invocation<Error,Out>))> = Continuation.PairedHeader{R & List<&2,U32>,(right,leftIds),left_returned(~World,~L,~R,~Error,~Out,~leftDispatch,~rightDispatch)}
+      Continuation.paired_returned(L & (World & Exec.Invocation<Error,Out>),Product<L,R> & (World & Exec.Invocation<Error,Out>),continuation,leftDispatch(left,world,id))
+    case False{}:
+      continuation:Continuation.PairedHeader<(R & (World & Exec.Invocation<Error,Out>)),(Product<L,R> & (World & Exec.Invocation<Error,Out>))> = Continuation.PairedHeader{L & List<&2,U32>,(left,leftIds),right_returned(~World,~L,~R,~Error,~Out,~leftDispatch,~rightDispatch)}
+      Continuation.paired_returned(R & (World & Exec.Invocation<Error,Out>),Product<L,R> & (World & Exec.Invocation<Error,Out>),continuation,rightDispatch(right,world,id))
 def paired_dispatch_actual(~World:Type,~L:Type,~R:Type,~Error:Data,~Out:Data,~leftDispatch:L -> World -> U32 -> L & (World & Exec.Invocation<Error,Out>),~rightDispatch:R -> World -> U32 -> R & (World & Exec.Invocation<Error,Out>),owners:Product<L,R>,world:World,+id:U32) -> Product<L,R> & (World & Exec.Invocation<Error,Out>):
   match owners:
     case Product{left,right,+leftIds}:paired_selected(~World,~L,~R,~Error,~Out,~leftDispatch,~rightDispatch,contains(leftIds,id),left,right,leftIds,world,id)

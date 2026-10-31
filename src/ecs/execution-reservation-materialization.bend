@@ -10,7 +10,7 @@ import ./chunk-column.bend as Column
 import ./change-tick.bend as Tick
 import ./world.bend as W
 import ./lifecycle.bend as L
-import ./chunk-partition.bend as Part
+import ./chunk-shape.bend as Part
 import ./execution-lifecycle-notices.bend as Notice
 import ./clock-state.bend as Clock
 import ./deferred-command.bend as Deferred

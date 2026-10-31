@@ -7,7 +7,6 @@ import ./execution-relation-failure-access.bend as Access
 import ./execution-state.bend as State
 import ./owner-product.bend as Product
 import ./relation-types.bend as T
-import ./execution-resource-store.bend as Resources
 import ./execution-resource-access.bend as ResourceAccess
 import ./execution-resource-interpreter.bend as Interpreter
 import ./execution-relation-failure-channel.bend as Reader
@@ -30,7 +29,6 @@ def cached_read(~S:Data,~descriptor:T.Descriptor<S>,~full:Layout.Layout,~route:L
   match cap scope:
     case ResourceAccess.UnsupportedReader{} scope:(scope,Reader.Refused{reader})
     case ResourceAccess.Reader{get} State.Scope{columns,resources,handles,+tick,prior,+view}:Access.cached_returned(~S,~descriptor,~full,~route,~State.Scope<S,C,R>,Access.view_namespace(~S,view),tick,reader,get(State.Scope{columns,resources,handles,tick,prior,view}))
-# The same recipe-backed cache serves Whole and Sparse models. Exact nominal
-# payload/view/policy witnesses come from the closed declaration, never a key.
-def general(~S:Data,~C:Type,~R:Type,~full:Layout.Layout,~route:Layout.Route,~valid:{Layout.grant_valid(~full,~route) == True{} : Bool},~descriptor:T.Descriptor<S>,~payload:{Layout.payload(full,route) == Store.Store<S,descriptor> : Type},~view:{Layout.view(full,route) == Store.View<S,descriptor> : Data},~protected:{Layout.policy(full,route) == Policy.ProtectedRelation{S,descriptor} : Policy.Policy},~model:Resources.Model,~local:{R == Resources.owner(~S,full,model) : Type}) -> Access.Read<S,descriptor,full,route,State.Scope<S,C,R>>:
-  Access.Read{reader => scope => cached_read(~S,~descriptor,~full,~route,~C,~R,view_reader(~S,~descriptor,~State.Scope<S,C,R>,~Layout.view(full,route),view,Interpreter.read_caps(~S,~C,~R,~full,~route,model,local)),reader,scope)}
+# Exact payload/view/policy witnesses come from the closed declaration.
+def general(~S:Data,~C:Type,~R:Type,~full:Layout.Layout,~route:Layout.Route,~valid:{Layout.grant_valid(~full,~route) == True{} : Bool},~descriptor:T.Descriptor<S>,~payload:{Layout.payload(full,route) == Store.Store<S,descriptor> : Type},~view:{Layout.view(full,route) == Store.View<S,descriptor> : Data},~protected:{Layout.policy(full,route) == Policy.ProtectedRelation{S,descriptor} : Policy.Policy},~local:{R == Layout.resources(~S,full) : Type}) -> Access.Read<S,descriptor,full,route,State.Scope<S,C,R>>:
+  Access.Read{reader => scope => cached_read(~S,~descriptor,~full,~route,~C,~R,view_reader(~S,~descriptor,~State.Scope<S,C,R>,~Layout.view(full,route),view,Interpreter.read_caps(~S,~C,~R,~full,~route,local)),reader,scope)}

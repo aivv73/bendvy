@@ -1,7 +1,7 @@
 ## Current #77 graph and machine execution boundary
 
 The historical #60 Runtime delivery below retains its original scope. Ordinary
-`examples/parallel-persistence/extended-*` consumers use the replacement executor
+`examples/system-persistence/extended-*` consumers use the replacement executor
 and the explicit receiver-retention contract described in
 [execution save boundary](../design/execution-save-boundary.md).
 
@@ -34,8 +34,8 @@ The ordinary resume entry runs the same returned application twice. Its first
 update handles a real body error and transitions the restored Waiting machine to
 Running. Its second update tests the changed state and skips the condition-bound
 transition system. Existing single-update restore and retry APIs retain their
-contracts. Ordering follows declared dependencies, while compatible native tasks
-use the existing parallel executor.
+contracts. Systems execute sequentially in declared dependency order, with
+structural publication at the configured barriers.
 
 Example-local observers traverse actual owners, cached views, queues, allocator,
 lifecycle, captures and returned receipts. Invalid-input retry retains a complete

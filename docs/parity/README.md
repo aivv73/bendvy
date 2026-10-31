@@ -1,5 +1,13 @@
 # Full-core parity — current state
 
+The [2026-10-31 sequential execution amendment](../SPEC.md#sequential-execution-user-amendment-2026-10-31-utc)
+governs the current executor migration. The issue deliveries and measurements
+below describe their recorded source revisions. They do not qualify the changed
+sequential implementation. Concurrency delivery is no longer a current execution
+requirement. Shared ownership, admission, commands, lifecycle, and persistence
+contracts remain requirements. The migration is not accepted until its actual
+ordinary consumers and affected authority boundaries have been checked.
+
 Specification: [37](https://github.com/dearlordylord/bendvy/issues/37). Full parent #1 retains feature/documentation obligations; performance parents #21/#23/#24 are deferred by the current SPEC priority. #34, #35, #36, #39, #40 and #47 are delivered for their accepted bounded scopes; full numeric performance remains under #21/#23/#24. Active slices are recorded below.
 
 Publication is scope tracking, not capability acceptance. Execute eligible current tasks only when their blockers and decision gates are satisfied; deferred performance issues are excluded from ready-for-agent.
@@ -41,7 +49,7 @@ Historical TS mechanisms and reusable tooling: [explicit archive index](../archi
 
 [Issue #77](https://github.com/dearlordylord/bendvy/issues/77) governs the
 replacement ordinary executor under the
-[SPEC amendment](../SPEC.md#ordinary-execution-replacement-user-amendment-2026-10-26-utc).
+[SPEC amendment](../SPEC.md#sequential-execution-user-amendment-2026-10-31-utc).
 The table records capability ownership and dependencies for the current ordinary
 executor. The [execution API guide](../reference/execution-api.md) names its
 retained application entries and retired modules. Each slice owns its affected
@@ -58,16 +66,16 @@ requirements for the current executor.
 | --- | --- | --- |
 | [#78](https://github.com/dearlordylord/bendvy/issues/78) | None | Ordinary affine System, nontransactional writes, actual owner return, and independent-storage consumer. |
 | [#79](https://github.com/dearlordylord/bendvy/issues/79) | #78 | Public dependency schedules, conditions, and error handlers. |
-| [#80](https://github.com/dearlordylord/bendvy/issues/80) | #79 | Compatible systems execute concurrently within one World. |
-| [#81](https://github.com/dearlordylord/bendvy/issues/81) | #78 | Independent query items update through native parallel traversal. |
-| [#82](https://github.com/dearlordylord/bendvy/issues/82) | #80, #81 | Filtered queries and application-defined cross-entity algorithms compose in parallel schedules. |
-| [#83](https://github.com/dearlordylord/bendvy/issues/83) | #80 | Local and affine captures persist across parallel schedule runs. |
+| [#80](https://github.com/dearlordylord/bendvy/issues/80) | #79 | Registered systems execute sequentially within one World with declared access admission. |
+| [#81](https://github.com/dearlordylord/bendvy/issues/81) | #78 | Queries traverse matched rows while retaining actual affine component and output owners. |
+| [#82](https://github.com/dearlordylord/bendvy/issues/82) | #80, #81 | Filtered queries and application-defined cross-entity algorithms compose in sequential schedules. |
+| [#83](https://github.com/dearlordylord/bendvy/issues/83) | #80 | Local and affine captures persist across repeated schedule updates. |
 | [#84](https://github.com/dearlordylord/bendvy/issues/84) | #80 | Data and owned events publish and read through the executor. |
-| [#85](https://github.com/dearlordylord/bendvy/issues/85) | #80, #81 | Change ticks and lifecycle readers observe both forms of parallelism. |
+| [#85](https://github.com/dearlordylord/bendvy/issues/85) | #80, #81 | Change ticks and lifecycle readers retain per-system cursors and publication visibility. |
 | [#86](https://github.com/dearlordylord/bendvy/issues/86) | #80, #81 | Commands apply at Bevy-style synchronization points. |
-| [#87](https://github.com/dearlordylord/bendvy/issues/87) | #86 | Parallel systems and query workers reserve and spawn entities safely. |
+| [#87](https://github.com/dearlordylord/bendvy/issues/87) | #86 | Systems and query bodies reserve and spawn through the actual framework-owned allocator. |
 | [#88](https://github.com/dearlordylord/bendvy/issues/88) | #79 | Fragments and features compose with checked provisioning. |
-| [#89](https://github.com/dearlordylord/bendvy/issues/89) | #85, #87 | Relations, hierarchy, and lifetime scopes work through parallel barriers. |
+| [#89](https://github.com/dearlordylord/bendvy/issues/89) | #85, #87 | Relations, hierarchy, and lifetime scopes work through deferred publication barriers. |
 | [#90](https://github.com/dearlordylord/bendvy/issues/90) | #83, #85, #86 | State and machine transition schedules use the executor. |
 | [#91](https://github.com/dearlordylord/bendvy/issues/91) | #85, #87 | Basic save/restore retains explicit pending-work refusal and resumes updates. |
 | [#92](https://github.com/dearlordylord/bendvy/issues/92) | #89, #90, #91 | Graph and machine restore resumes ordinary schedules. |
@@ -76,9 +84,8 @@ requirements for the current executor.
 
 Every slice requires complete ordinary-consumer observations on JavaScript and
 native execution, applicable affine ownership and authority controls, normal
-checks, and independent Spec and Standards review. Native parallel delivery also
-requires evidence that the ordinary single-World path reaches fork/join and uses
-multiple runtime workers. Finite observations do not establish universal correctness.
+checks, and independent Spec and Standards review. Native qualification uses the
+same sequential application behavior. Finite observations do not establish universal correctness.
 Numerical performance campaigns and GPU delivery remain outside this work.
 
 ## Earlier accepted frontier

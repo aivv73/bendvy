@@ -1,5 +1,5 @@
 import Base
-import ./execution-reservation-task.bend as Task
+import ./execution-effects.bend as Effects
 import ./chunk-column.bend as C
 import ./lifecycle.bend as L
 import ./change-tick.bend as Tick
@@ -37,7 +37,7 @@ def same(left:Layout,right:Layout) -> Bool:
     case LayoutLeaf{} LayoutLeaf{}: True{}
     case LayoutBranch{lh,ll,lr} LayoutBranch{rh,rl,rr}: U32.is_eq(lh,rh) && same(ll,rl) && same(lr,rr)
     case _ _: False{}
-# Each worker owns both its physical columns and its affine output channel.
+# Sequential row traversal threads its physical columns and affine output owner.
 # Context is reusable selection data; it cannot contain affine payload owners.
 type OutputRow<-A:Type,-B:Type,-O:Type,-E:Data> is Type:
   OutputRow{read:Maybe<&1,A>,write:Maybe<&1,B>,stamp:L.Stamp,output:O,errors:List<&2,Error<E>>}
@@ -49,61 +49,61 @@ def output_result(~A:Type,~B:Type,~O:Type,~E:Data,read:A,index:U32,stamp:L.Stamp
   match result:
     case (write,(output,None{})):OutputRow{Some{read},Some{write},stamp,output,[]}
     case (write,(output,Some{error})):OutputRow{Some{read},Some{write},stamp,output,[Error{index,error}]}
-def output_projected(~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),context:K,write:B,output:O,+index:U32,stamp:L.Stamp,tick:Tick.Tick,result:A & V) -> OutputRow<A,B,O,E>:
-  match result:
-    case (read,view):output_result(~A,~B,~O,~E,read,index,L.written(True{},stamp,tick),body(context,index,view,write,output))
-def output_allowed(~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),context:K,read:A,write:B,output:O,index:U32,stamp:L.Stamp,tick:Tick.Tick,allowed:Bool) -> OutputRow<A,B,O,E>:
-  match allowed:
-    case False{}:OutputRow{Some{read},Some{write},stamp,output,[]}
-    case True{}:output_projected(~A,~B,~O,~V,~K,~E,~body,context,write,output,index,stamp,tick,project(read))
-def output_row(~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),context:K,read:Maybe<&1,A>,write:Maybe<&1,B>,output:O,+index:U32,+stamp:L.Stamp,+tick:Tick.Tick,selection:Selection) -> OutputRow<A,B,O,E>:
-  match read write:
-    case None{} write:OutputRow{None{},write,stamp,output,[]}
-    case Some{read} None{}:OutputRow{Some{read},None{},stamp,output,[]}
-    case Some{read} Some{write}:output_allowed(~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,index,stamp,tick,eligible(index,stamp,tick,selection))
 def output_values(~A:Type,~B:Type,~O:Type,~E:Data,result:OutputRow<A,B,O,E>) -> OutputValues<A,B,O,E>:
   match result:
     case OutputRow{read,write,stamp,output,errors}:OutputValues{ALeaf{read},ALeaf{write},ALeaf{stamp},output,errors,True{}}
 def output_values_join(~A:Type,~B:Type,~O:Type,~E:Data,leftRead:Array<Maybe<&1,A>>,leftWrite:Array<Maybe<&1,B>>,leftStamps:Array<L.Stamp>,leftErrors:List<&2,Error<E>>,leftAligned:Bool,right:OutputValues<A,B,O,E>) -> OutputValues<A,B,O,E>:
   match right:
     case OutputValues{read,write,stamps,output,errors,aligned}:OutputValues{ANode{leftRead,read},ANode{leftWrite,write},ANode{leftStamps,stamps},output,List.append(&2,Error<E>,leftErrors,errors),Bool.and(leftAligned,aligned)}
-def output_leaf_right(~A:Type,~B:Type,~O:Type,~E:Data,offset:U32,size:U32,tick:Tick.Tick,selection:Selection,left:OutputValues<A,B,O,E>,walk:O -> @+offset:U32 -> @+size:U32 -> @+tick:Tick.Tick -> @+selection:Selection -> OutputValues<A,B,O,E>) -> OutputValues<A,B,O,E>:
-  match left:
-    case OutputValues{la,lb,ls,output,errors,aligned}:output_values_join(~A,~B,~O,~E,la,lb,ls,errors,aligned,walk(output,offset,size,tick,selection))
-def output_leaf(~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),+context:K,read:Array<Maybe<&1,A>>,write:Array<Maybe<&1,B>>,stamps:Array<L.Stamp>,output:O,+offset:U32,+size:U32,+tick:Tick.Tick,+selection:Selection) -> OutputValues<A,B,O,E>:
-  match read write stamps:
-    case ALeaf{a} ALeaf{b} ALeaf{stamp}:output_values(~A,~B,~O,~E,output_row(~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,output,offset,stamp,tick,selection))
-    case ANode{al,ar} ANode{bl,br} ANode{sl,sr}:output_leaf_right(~A,~B,~O,~E,U32.add(offset,U32.shr(size)),U32.shr(size),tick,selection,output_leaf(~A,~B,~O,~V,~K,~E,~project,~body,context,al,bl,sl,output,offset,U32.shr(size),tick,selection),output_leaf(~A,~B,~O,~V,~K,~E,~project,~body,context,ar,br,sr))
-    case a b s:OutputValues{a,b,s,output,[],False{}}
 def output_leaf_run(~S:Data,~A:Type,~B:Type,~O:Type,~E:Data,readStamps:Array<L.Stamp>,result:OutputValues<A,B,O,E>) -> OutputRun<S,A,B,O,E>:
   match result:
     case OutputValues{a,b,stamps,output,errors,aligned}:OutputRun{C.Leaf{a,readStamps},C.Leaf{b,stamps},output,errors,aligned}
-def output_join(~S:Data,~A:Type,~B:Type,~O:Type,~E:Data,~merge:O -> O -> O,+half:U32,left:OutputRun<S,A,B,O,E>,right:OutputRun<S,A,B,O,E>) -> OutputRun<S,A,B,O,E>:
-  match left right:
-    case OutputRun{la,lb,lo,le,lv} OutputRun{ra,rb,ro,re,rv}:OutputRun{C.Branch{half,la,ra},C.Branch{half,lb,rb},merge(lo,ro),List.append(&2,Error<E>,le,re),Bool.and(lv,rv)}
-def output_pair(~S:Data,~A:Type,~B:Type,~O:Type,~E:Data,~merge:O -> O -> O,half:U32,parallel:Bool,outputs:O & O,left:O -> OutputRun<S,A,B,O,E>,right:O -> OutputRun<S,A,B,O,E>) -> OutputRun<S,A,B,O,E>:
-  match parallel outputs:
-    case False{} Tuple{lo,ro}:output_join(~S,~A,~B,~O,~E,~merge,half,left(lo),right(ro))
-    case True{} Tuple{lo,ro}:
-      l r = left(lo) right(ro)
-      output_join(~S,~A,~B,~O,~E,~merge,half,l,r)
-def output_rows(~S:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),~split:O -> O & O,~merge:O -> O -> O,+context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,+offset:U32,+tick:Tick.Tick,+selection:Selection,+parallel:Bool) -> OutputRun<S,A,B,O,E>:
+def output_join(~S:Data,~A:Type,~B:Type,~O:Type,~E:Data,+half:U32,leftRead:C.Column<S,A>,leftWrite:C.Column<S,B>,leftErrors:List<&2,Error<E>>,leftAligned:Bool,right:OutputRun<S,A,B,O,E>) -> OutputRun<S,A,B,O,E>:
+  match right:
+    case OutputRun{read,write,output,errors,aligned}:OutputRun{C.Branch{half,leftRead,read},C.Branch{half,leftWrite,write},output,List.append(&2,Error<E>,leftErrors,errors),Bool.and(leftAligned,aligned)}
+def effect_Body(~F:Type -> Type,~K:Data,~V:Data,~B:Type,~O:Type,~E:Data) -> Type:
+  K -> U32 -> V -> B -> O -> F(B & (O & Maybe<&2,E>))
+def effect_projected(~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,write:B,output:O,+index:U32,stamp:L.Stamp,tick:Tick.Tick,result:A & V) -> F(OutputRow<A,B,O,E>):
+  match result:
+    case (read,view):Effects.map(~F,(B & (O & Maybe<&2,E>)),OutputRow<A,B,O,E>,effects,body(context,index,view,write,output),result => output_result(~A,~B,~O,~E,read,index,L.written(True{},stamp,tick),result))
+def effect_allowed(~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,read:A,write:B,output:O,index:U32,stamp:L.Stamp,tick:Tick.Tick,selected:Bool) -> F(OutputRow<A,B,O,E>):
+  match selected:
+    case False{}:Effects.pure(~F,OutputRow<A,B,O,E>,effects,OutputRow{Some{read},Some{write},stamp,output,[]})
+    case True{}:effect_projected(~F,~effects,~A,~B,~O,~V,~K,~E,~body,context,write,output,index,stamp,tick,project(read))
+def effect_row(~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,read:Maybe<&1,A>,write:Maybe<&1,B>,output:O,+index:U32,+stamp:L.Stamp,+tick:Tick.Tick,selection:Selection) -> F(OutputRow<A,B,O,E>):
   match read write:
-    case C.Leaf{a,sa} C.Leaf{b,sb}:output_leaf_run(~S,~A,~B,~O,~E,sa,output_leaf(~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,sb,output,offset,8,tick,selection))
-    case C.Branch{+half,al,ar} C.Branch{_,bl,br}:output_pair(~S,~A,~B,~O,~E,~merge,half,parallel,split(output),lo=>output_rows(~S,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,al,bl,lo,offset,tick,selection,parallel),ro=>output_rows(~S,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,ar,br,ro,U32.add(offset,half),tick,selection,parallel))
-    case a b:OutputRun{a,b,output,[],False{}}
-def output_execute(~S:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),~split:O -> O & O,~merge:O -> O -> O,context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool,aligned:Bool) -> OutputRun<S,A,B,O,E>:
+    case None{} write:Effects.pure(~F,OutputRow<A,B,O,E>,effects,OutputRow{None{},write,stamp,output,[]})
+    case Some{read} None{}:Effects.pure(~F,OutputRow<A,B,O,E>,effects,OutputRow{Some{read},None{},stamp,output,[]})
+    case Some{read} Some{write}:effect_allowed(~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,index,stamp,tick,eligible(index,stamp,tick,selection))
+def effect_leaf_right(~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~E:Data,left:OutputValues<A,B,O,E>,walk:O -> F(OutputValues<A,B,O,E>)) -> F(OutputValues<A,B,O,E>):
+  match left:
+    case OutputValues{read,write,stamps,output,errors,aligned}:Effects.map(~F,OutputValues<A,B,O,E>,OutputValues<A,B,O,E>,effects,walk(output),right => output_values_join(~A,~B,~O,~E,read,write,stamps,errors,aligned,right))
+def effect_leaf(~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),+context:K,read:Array<Maybe<&1,A>>,write:Array<Maybe<&1,B>>,stamps:Array<L.Stamp>,output:O,+offset:U32,+size:U32,+tick:Tick.Tick,+selection:Selection) -> F(OutputValues<A,B,O,E>):
+  match read write stamps:
+    case ALeaf{a} ALeaf{b} ALeaf{stamp}:Effects.map(~F,OutputRow<A,B,O,E>,OutputValues<A,B,O,E>,effects,effect_row(~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,output,offset,stamp,tick,selection),result => output_values(~A,~B,~O,~E,result))
+    case ANode{al,ar} ANode{bl,br} ANode{sl,sr}:Effects.bind(~F,OutputValues<A,B,O,E>,OutputValues<A,B,O,E>,effects,effect_leaf(~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,al,bl,sl,output,offset,U32.shr(size),tick,selection),left => effect_leaf_right(~F,~effects,~A,~B,~O,~E,left,output => effect_leaf(~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,ar,br,sr,output,U32.add(offset,U32.shr(size)),U32.shr(size),tick,selection)))
+    case a b s:Effects.pure(~F,OutputValues<A,B,O,E>,effects,OutputValues{a,b,s,output,[],False{}})
+def effect_branch_right(~S:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~E:Data,+half:U32,left:OutputRun<S,A,B,O,E>,walk:O -> F(OutputRun<S,A,B,O,E>)) -> F(OutputRun<S,A,B,O,E>):
+  match left:
+    case OutputRun{read,write,output,errors,aligned}:Effects.map(~F,OutputRun<S,A,B,O,E>,OutputRun<S,A,B,O,E>,effects,walk(output),right => output_join(~S,~A,~B,~O,~E,half,read,write,errors,aligned,right))
+def effect_rows(~S:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),+context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,+offset:U32,+tick:Tick.Tick,+selection:Selection) -> F(OutputRun<S,A,B,O,E>):
+  match read write:
+    case C.Leaf{a,sa} C.Leaf{b,sb}:Effects.map(~F,OutputValues<A,B,O,E>,OutputRun<S,A,B,O,E>,effects,effect_leaf(~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,sb,output,offset,8,tick,selection),result => output_leaf_run(~S,~A,~B,~O,~E,sa,result))
+    case C.Branch{+half,al,ar} C.Branch{_,bl,br}:Effects.bind(~F,OutputRun<S,A,B,O,E>,OutputRun<S,A,B,O,E>,effects,effect_rows(~S,~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,al,bl,output,offset,tick,selection),left => effect_branch_right(~S,~F,~effects,~A,~B,~O,~E,half,left,output => effect_rows(~S,~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,ar,br,output,U32.add(offset,half),tick,selection)))
+    case a b:Effects.pure(~F,OutputRun<S,A,B,O,E>,effects,OutputRun{a,b,output,[],False{}})
+def effect_execute(~S:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection,aligned:Bool) -> F(OutputRun<S,A,B,O,E>):
   match aligned:
-    case False{}:OutputRun{read,write,output,[],False{}}
-    case True{}:output_rows(~S,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,read,write,output,offset,tick,selection,parallel)
-def output_prepared(~S:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),~split:O -> O & O,~merge:O -> O -> O,context:K,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool,left:C.Column<S,A> & Layout,right:C.Column<S,B> & Layout) -> OutputRun<S,A,B,O,E>:
+    case False{}:Effects.pure(~F,OutputRun<S,A,B,O,E>,effects,OutputRun{read,write,output,[],False{}})
+    case True{}:effect_rows(~S,~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,offset,tick,selection)
+def effect_prepared(~S:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,output:O,offset:U32,tick:Tick.Tick,selection:Selection,left:C.Column<S,A> & Layout,right:C.Column<S,B> & Layout) -> F(OutputRun<S,A,B,O,E>):
   match left right:
-    case Tuple{read,ls} Tuple{write,rs}:output_execute(~S,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,read,write,output,offset,tick,selection,parallel,same(ls,rs))
-def with_output(~S:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),~split:O -> O & O,~merge:O -> O -> O,context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool) -> OutputRun<S,A,B,O,E>:
-  output_prepared(~S,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,output,offset,tick,selection,parallel,layout(~S,~A,read),layout(~S,~B,write))
+    case Tuple{read,ls} Tuple{write,rs}:effect_execute(~S,~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,offset,tick,selection,same(ls,rs))
+def effect_with_output(~S:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:effect_Body(~F,~K,~V,~B,~O,~E),context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection) -> F(OutputRun<S,A,B,O,E>):
+  effect_prepared(~S,~F,~effects,~A,~B,~O,~V,~K,~E,~project,~body,context,output,offset,tick,selection,layout(~S,~A,read),layout(~S,~B,write))
 
-def unit_split(_:Unit) -> Unit & Unit:(Unit{},Unit{})
-def unit_merge(_:Unit,_:Unit) -> Unit:Unit{}
+def with_output(~S:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> B & (O & Maybe<&2,E>),context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection) -> OutputRun<S,A,B,O,E>:
+  effect_with_output(~S,~Effects.Identity,~Effects.identity(),~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,offset,tick,selection)
+
 def unit_result(~B:Type,~E:Data,result:B & Maybe<&2,E>) -> B & (Unit & Maybe<&2,E>):
   match result:
     case (owner,error):(owner,(Unit{},error))
@@ -112,52 +112,9 @@ def unit_body(~B:Type,~V:Data,~E:Data,~body:U32 -> V -> B -> B & Maybe<&2,E>,_:U
 def unit_run(~S:Data,~A:Type,~B:Type,~E:Data,result:OutputRun<S,A,B,Unit,E>) -> Run<S,A,B,E>:
   match result:
     case OutputRun{read,write,_,errors,aligned}:Run{read,write,errors,aligned}
-def selected(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool) -> Run<S,A,B,E>:
-  unit_run(~S,~A,~B,~E,with_output(~S,~A,~B,~Unit,~V,~Unit,~E,~project,~unit_body(~B,~V,~E,~body),~unit_split,~unit_merge,Unit{},read,write,Unit{},offset,tick,selection,parallel))
+def selected(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick,selection:Selection) -> Run<S,A,B,E>:
+  unit_run(~S,~A,~B,~E,with_output(~S,~A,~B,~Unit,~V,~Unit,~E,~project,~unit_body(~B,~V,~E,~body),Unit{},read,write,Unit{},offset,tick,selection))
 def serial(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick) -> Run<S,A,B,E>:
-  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,All{},False{})
-def parallel(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick) -> Run<S,A,B,E>:
-  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,All{},True{})
+  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,All{})
 def serial_selected(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick,selection:Selection) -> Run<S,A,B,E>:
-  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,selection,False{})
-def parallel_selected(~S:Data,~A:Type,~B:Type,~V:Data,~E:Data,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,read:C.Column<S,A>,write:C.Column<S,B>,offset:U32,tick:Tick.Tick,selection:Selection) -> Run<S,A,B,E>:
-  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,selection,True{})
-
-def task_output_projected(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,context:K,write:B,output:O,+index:U32,stamp:L.Stamp,tick:Tick.Tick,result:A & V) -> Task.Task<S,Permit,OutputRow<A,B,O,E>>:
-  match result:
-    case (read,view):Task.TBind{B & (O & Maybe<&2,E>),body(context,index,view,write,output),result=>Task.TDone{output_result(~A,~B,~O,~E,read,index,L.written(True{},stamp,tick),result)}}
-def task_output_allowed(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,context:K,read:A,write:B,output:O,index:U32,stamp:L.Stamp,tick:Tick.Tick,allowed:Bool) -> Task.Task<S,Permit,OutputRow<A,B,O,E>>:
-  match allowed:
-    case False{}:Task.TDone{OutputRow{Some{read},Some{write},stamp,output,[]}}
-    case True{}:task_output_projected(~S,~Permit,~A,~B,~O,~V,~K,~E,~body,context,write,output,index,stamp,tick,project(read))
-def task_output_row(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,context:K,read:Maybe<&1,A>,write:Maybe<&1,B>,output:O,+index:U32,+stamp:L.Stamp,+tick:Tick.Tick,selection:Selection) -> Task.Task<S,Permit,OutputRow<A,B,O,E>>:
-  match read write:
-    case None{} write:Task.TDone{OutputRow{None{},write,stamp,output,[]}}
-    case Some{read} None{}:Task.TDone{OutputRow{Some{read},None{},stamp,output,[]}}
-    case Some{read} Some{write}:task_output_allowed(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,context,read,write,output,index,stamp,tick,eligible(index,stamp,tick,selection))
-def task_output_leaf_right(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~E:Data,left:OutputValues<A,B,O,E>,walk:O -> Task.Task<S,Permit,OutputValues<A,B,O,E>>) -> Task.Task<S,Permit,OutputValues<A,B,O,E>>:
-  match left:
-    case OutputValues{la,lb,ls,output,errors,aligned}:Task.TBind{OutputValues<A,B,O,E>,walk(output),right=>Task.TDone{output_values_join(~A,~B,~O,~E,la,lb,ls,errors,aligned,right)}}
-def task_output_leaf(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,+context:K,read:Array<Maybe<&1,A>>,write:Array<Maybe<&1,B>>,stamps:Array<L.Stamp>,output:O,+offset:U32,+size:U32,+tick:Tick.Tick,+selection:Selection) -> Task.Task<S,Permit,OutputValues<A,B,O,E>>:
-  match read write stamps:
-    case ALeaf{a} ALeaf{b} ALeaf{stamp}:Task.TBind{OutputRow<A,B,O,E>,Task.TRun{_=>task_output_row(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,output,offset,stamp,tick,selection)},row=>Task.TDone{output_values(~A,~B,~O,~E,row)}}
-    case ANode{al,ar} ANode{bl,br} ANode{sl,sr}:Task.TBind{OutputValues<A,B,O,E>,task_output_leaf(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,context,al,bl,sl,output,offset,U32.shr(size),tick,selection),left=>task_output_leaf_right(~S,~Permit,~A,~B,~O,~E,left,output=>task_output_leaf(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,context,ar,br,sr,output,U32.add(offset,U32.shr(size)),U32.shr(size),tick,selection))}
-    case a b s:Task.TDone{OutputValues{a,b,s,output,[],False{}}}
-def task_output_pair(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~E:Data,~merge:O -> O -> O,+half:U32,parallel:Bool,outputs:O & O,left:O -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>,right:O -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>) -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>:
-  match parallel outputs:
-    case False{} Tuple{lo,ro}:Task.TBind{OutputRun<S,A,B,O,E>,Task.TRun{_=>left(lo)},l=>Task.TBind{OutputRun<S,A,B,O,E>,Task.TRun{_=>right(ro)},r=>Task.TDone{output_join(~S,~A,~B,~O,~E,~merge,half,l,r)}}}
-    case True{} Tuple{lo,ro}:Task.TFork{OutputRun<S,A,B,O,E>,OutputRun<S,A,B,O,E>,Task.TRun{_=>left(lo)},Task.TRun{_=>right(ro)},l=>r=>Task.TDone{output_join(~S,~A,~B,~O,~E,~merge,half,l,r)}}
-def task_output_rows(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,~split:O -> O & O,~merge:O -> O -> O,+context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,+offset:U32,+tick:Tick.Tick,+selection:Selection,+parallel:Bool) -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>:
-  match read write:
-    case C.Leaf{a,sa} C.Leaf{b,sb}:Task.TBind{OutputValues<A,B,O,E>,task_output_leaf(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,context,a,b,sb,output,offset,8,tick,selection),result=>Task.TDone{output_leaf_run(~S,~A,~B,~O,~E,sa,result)}}
-    case C.Branch{+half,al,ar} C.Branch{_,bl,br}:task_output_pair(~S,~Permit,~A,~B,~O,~E,~merge,half,parallel,split(output),lo=>task_output_rows(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,al,bl,lo,offset,tick,selection,parallel),ro=>task_output_rows(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,ar,br,ro,U32.add(offset,half),tick,selection,parallel))
-    case a b:Task.TDone{OutputRun{a,b,output,[],False{}}}
-def task_output_execute(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,~split:O -> O & O,~merge:O -> O -> O,context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool,aligned:Bool) -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>:
-  match aligned:
-    case False{}:Task.TDone{OutputRun{read,write,output,[],False{}}}
-    case True{}:task_output_rows(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,read,write,output,offset,tick,selection,parallel)
-def task_output_prepared(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,~split:O -> O & O,~merge:O -> O -> O,context:K,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool,left:C.Column<S,A> & Layout,right:C.Column<S,B> & Layout) -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>:
-  match left right:
-    case Tuple{read,ls} Tuple{write,rs}:task_output_execute(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,read,write,output,offset,tick,selection,parallel,same(ls,rs))
-def with_task_output(~S:Data,~Permit:Data,~A:Type,~B:Type,~O:Type,~V:Data,~K:Data,~E:Data,~project:A -> A & V,~body:K -> U32 -> V -> B -> O -> Task.Task<S,Permit,B & (O & Maybe<&2,E>)>,~split:O -> O & O,~merge:O -> O -> O,context:K,read:C.Column<S,A>,write:C.Column<S,B>,output:O,offset:U32,tick:Tick.Tick,selection:Selection,parallel:Bool) -> Task.Task<S,Permit,OutputRun<S,A,B,O,E>>:
-  task_output_prepared(~S,~Permit,~A,~B,~O,~V,~K,~E,~project,~body,~split,~merge,context,output,offset,tick,selection,parallel,layout(~S,~A,read),layout(~S,~B,write))
+  selected(~S,~A,~B,~V,~E,~project,~body,read,write,offset,tick,selection)

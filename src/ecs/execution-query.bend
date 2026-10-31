@@ -1,5 +1,5 @@
 import Base
-import ./execution-reservation-task.bend as Task
+import ./execution-effects.bend as Effects
 import ./execution-query-identity.bend as Index
 import ./execution-query-domain.bend as Domain
 import ./execution-lifecycle-notices.bend as Notice
@@ -17,22 +17,12 @@ import ./execution-composer-layout.bend as Layout
 import ./execution-query-recipe.bend as Recipe
 
 type Mode is Data:
-  Serial{}
-  Parallel{}
-  SerialWhere{filter:Life.Filter}
-  ParallelWhere{filter:Life.Filter}
-def mode_parallel(mode:Mode) -> Bool:
-  match mode:
-    case Serial{}:False{}
-    case Parallel{}:True{}
-    case SerialWhere{_}:False{}
-    case ParallelWhere{_}:True{}
+  AllRows{}
+  Where{filter:Life.Filter}
 def selection(mode:Mode,indices:List<&2,U32>,prior:Maybe<&2,Tick.Tick>) -> Q.Selection:
   match mode:
-    case Serial{}:Q.Selected{indices}
-    case Parallel{}:Q.Selected{indices}
-    case SerialWhere{filter}:Q.Filtered{indices,filter,prior}
-    case ParallelWhere{filter}:Q.Filtered{indices,filter,prior}
+    case AllRows{}:Q.Selected{indices}
+    case Where{filter}:Q.Filtered{indices,filter,prior}
 type Report<-E:Data> is Data:
   Completed{errors:List<&2,Q.Error<E>>}
   LayoutRefused{}
@@ -57,7 +47,7 @@ def returned(~S:Data,~C:Type,~R:Type,~A:Type,~B:Type,~Rest:Type,~E:Data,~lens:Pr
     case Q.Run{read,write,errors,aligned}: (State.Scope{Product.put_field(~C,~Product.Owner<Col.Column<S,A>,Col.Column<S,B>>,~Rest,lens)(rest,Product.Owner{read,write}),resource,handles,tick,prior,lifecycleView},report(~E,errors,aligned))
 def taken(~S:Data,~C:Type,~R:Type,~A:Type,~B:Type,~Rest:Type,~V:Data,~E:Data,~lens:Product.Lens<C,Product.Owner<Col.Column<S,A>,Col.Column<S,B>>,Rest>,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,+mode:Mode,resource:R,+handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+selected:List<&2,U32>,result:Rest & Product.Owner<Col.Column<S,A>,Col.Column<S,B>>,+lifecycleView:Notice.View<S>) -> State.Scope<S,C,R> & Report<E>:
   match result:
-    case Tuple{rest,Product.Owner{read,write}}:returned(~S,~C,~R,~A,~B,~Rest,~E,~lens,rest,resource,handles,tick,prior,Q.selected(~S,~A,~B,~V,~E,~project,~logical_body(~A,~B,~V,~E,~body),read,write,0,tick,selection(mode,selected,prior),mode_parallel(mode)),lifecycleView)
+    case Tuple{rest,Product.Owner{read,write}}:returned(~S,~C,~R,~A,~B,~Rest,~E,~lens,rest,resource,handles,tick,prior,Q.selected(~S,~A,~B,~V,~E,~project,~logical_body(~A,~B,~V,~E,~body),read,write,0,tick,selection(mode,selected,prior)),lifecycleView)
 def invoke_targets(~S:Data,~C:Type,~R:Type,~A:Type,~B:Type,~Rest:Type,~V:Data,~E:Data,~lens:Product.Lens<C,Product.Owner<Col.Column<S,A>,Col.Column<S,B>>,Rest>,~project:A -> A & V,~body:U32 -> V -> B -> B & Maybe<&2,E>,mode:Mode,scope:State.Scope<S,C,R>,targets:Index.TargetCheck<S>) -> State.Scope<S,C,R> & Report<E>:
   match scope targets:
     case State.Scope{store,resource,handles,tick,prior,+lifecycleView} Index.Targets{_,Domain.Domain{selected}}: taken(~S,~C,~R,~A,~B,~Rest,~V,~E,~lens,~project,~body,mode,resource,handles,tick,prior,selected,Product.get_field(~C,~Product.Owner<Col.Column<S,A>,Col.Column<S,B>>,~Rest,lens)(store),lifecycleView)
@@ -113,18 +103,18 @@ def output_body(~S:Data,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Dat
 def output_returned(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,rest:Layout.subtree_rest(~S,layout,route),resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,result:Q.OutputRun<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),O,E>,+lifecycleView:Notice.View<S>) -> State.Scope<S,C,R> & (O & Report<E>):
   match result:
     case Q.OutputRun{read,write,output,errors,aligned}:(State.Scope{layout_put(~S,~C,~layout,~route,~same,~shape,rest,Product.Owner{read,write}),resource,handles,tick,prior,lifecycleView},(output,report(~E,errors,aligned)))
-def output_taken(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:OutputBody(~S,~layout,~route,~O,~E),output:O,resource:R,+handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+mode:Mode,+selected:List<&2,U32>,result:Layout.subtree_rest(~S,layout,route) & Product.Owner<Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}})>,Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}})>>,+lifecycleView:Notice.View<S>) -> State.Scope<S,C,R> & (O & Report<E>):
+def output_taken(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:OutputBody(~S,~layout,~route,~O,~E),output:O,resource:R,+handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+mode:Mode,+selected:List<&2,U32>,result:Layout.subtree_rest(~S,layout,route) & Product.Owner<Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}})>,Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}})>>,+lifecycleView:Notice.View<S>) -> State.Scope<S,C,R> & (O & Report<E>):
   match result:
-    case (rest,Product.Owner{read,write}):output_returned(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,rest,resource,handles,tick,prior,Q.with_output(~S,~Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),~Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),~O,~Layout.query_view(layout,route),~List<&2,W.Handle<S>>,~E,~Layout.read(~Layout.query_input(layout,route),~Layout.query_view(layout,route)),~output_body(~S,~layout,~route,~O,~E,~body),~split,~merge,handles,read,write,output,0,tick,selection(mode,selected,prior),mode_parallel(mode)),lifecycleView)
-def output_invoke_targets(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O,targets:Index.TargetCheck<S>) -> State.Scope<S,C,R> & (O & Report<E>):
+    case (rest,Product.Owner{read,write}):output_returned(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,rest,resource,handles,tick,prior,Q.with_output(~S,~Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),~Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),~O,~Layout.query_view(layout,route),~List<&2,W.Handle<S>>,~E,~Layout.read(~Layout.query_input(layout,route),~Layout.query_view(layout,route)),~output_body(~S,~layout,~route,~O,~E,~body),handles,read,write,output,0,tick,selection(mode,selected,prior)),lifecycleView)
+def output_invoke_targets(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O,targets:Index.TargetCheck<S>) -> State.Scope<S,C,R> & (O & Report<E>):
   match scope targets:
-    case State.Scope{store,resource,handles,tick,prior,+lifecycleView} Index.Targets{_,Domain.Domain{selected}}:output_taken(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,output,resource,handles,tick,prior,mode,selected,layout_take(~S,~C,~layout,~route,~same,~shape,store),lifecycleView)
+    case State.Scope{store,resource,handles,tick,prior,+lifecycleView} Index.Targets{_,Domain.Domain{selected}}:output_taken(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,output,resource,handles,tick,prior,mode,selected,layout_take(~S,~C,~layout,~route,~same,~shape,store),lifecycleView)
     case scope Index.Refused{_}:(scope,(output,LayoutRefused{}))
-def output_invoke(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O) -> State.Scope<S,C,R> & (O & Report<E>):
+def output_invoke(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O) -> State.Scope<S,C,R> & (O & Report<E>):
   match scope:
-    case State.Scope{store,resource,+handles,tick,prior,+lifecycleView}:output_invoke_targets(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,mode,State.Scope{store,resource,handles,tick,prior,lifecycleView},output,Index.targets(~S,view_namespace(~S,lifecycleView),handles))
-def output_declaration(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~valid:{Layout.query_valid(~layout,~route) == True{} : Bool},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode) -> D.Declaration<S,C,R,OutputOps(~S,~O,~E)>:
-  D.Declaration{OutputEach{output_invoke(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,mode)},[D.Access{Layout.query_read_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.ReadOnly{}},D.Access{Layout.query_write_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.Writable{}}]}
+    case State.Scope{store,resource,+handles,tick,prior,+lifecycleView}:output_invoke_targets(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,mode,State.Scope{store,resource,handles,tick,prior,lifecycleView},output,Index.targets(~S,view_namespace(~S,lifecycleView),handles))
+def output_declaration(~S:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~valid:{Layout.query_valid(~layout,~route) == True{} : Bool},~O:Type,~E:Data,~body:OutputBody(~S,~layout,~route,~O,~E),mode:Mode) -> D.Declaration<S,C,R,OutputOps(~S,~O,~E)>:
+  D.Declaration{OutputEach{output_invoke(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,mode)},[D.Access{Layout.query_read_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.ReadOnly{}},D.Access{Layout.query_write_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.Writable{}}]}
 def each_output(~S:Data,~H:Type,~O:Type,~E:Data,cap:OutputEach<S,H,O,E>) -> H -> O -> H & (O & Report<E>):
   match cap:
     case OutputEach{run}:run
@@ -190,32 +180,32 @@ def GeneralOps(~S:Data,~P:Type,~V:Data,kind:Recipe.QueryKind,H:Type) -> Type:
     case Recipe.ReadRows{}:GeneralReader<S,H,V>
     case Recipe.WriteRows{}:GeneralWriter<S,H,P,V>
 
-def TaskOutputBody(~S:Data,~Permit:Data,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data) -> Type:
-  W.Handle<S> -> Layout.query_view(layout,route) -> Layout.query_output(layout,route) -> O -> Task.Task<S,Permit,Layout.query_output(layout,route) & (O & Maybe<&2,E>)>
-type TaskOutputEach<-S:Data,-Permit:Data,-H:Type,-O:Type,-E:Data> is Type:
-  TaskOutputEach{run:H -> O -> Task.Task<S,Permit,H & (O & Report<E>)>}
-def TaskOutputOps(~S:Data,~Permit:Data,~O:Type,~E:Data,H:Type) -> Type:TaskOutputEach<S,Permit,H,O,E>
-def task_output_body_found(~S:Data,~Permit:Data,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),view:Layout.query_view(layout,route),owner:Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),output:O,found:Maybe<&2,W.Handle<S>>) -> Task.Task<S,Permit,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)>:
+def SequentialOutputBody(~S:Data,~Permit:Data,~F:Type -> Type,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data) -> Type:
+  W.Handle<S> -> Layout.query_view(layout,route) -> Layout.query_output(layout,route) -> O -> F(Layout.query_output(layout,route) & (O & Maybe<&2,E>))
+type SequentialOutputEach<-S:Data,-Permit:Data,-F:Type -> Type,-H:Type,-O:Type,-E:Data> is Type:
+  SequentialOutputEach{run:H -> O -> F(H & (O & Report<E>))}
+def SequentialOutputOps(~S:Data,~Permit:Data,~F:Type -> Type,~O:Type,~E:Data,H:Type) -> Type:SequentialOutputEach<S,Permit,F,H,O,E>
+def sequential_output_body_found(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),view:Layout.query_view(layout,route),owner:Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),output:O,found:Maybe<&2,W.Handle<S>>) -> F(Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)):
   match owner found:
-    case owner None{}:Task.TDone{(owner,(output,None{}))}
-    case Layout.Viewed{payload,_} Some{handle}:Task.TBind{Layout.query_output(layout,route) & (O & Maybe<&2,E>),body(handle,view,payload,output),result=>Task.TDone{Layout.rewritten(~Layout.subtree(layout,route),~Layout.InRight{Layout.AtLeaf{}},O & Maybe<&2,E>,result)}}
-def task_output_body(~S:Data,~Permit:Data,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),handles:List<&2,W.Handle<S>>,index:U32,view:Layout.query_view(layout,route),owner:Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),output:O) -> Task.Task<S,Permit,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)>:
-  task_output_body_found(~S,~Permit,~layout,~route,~O,~E,~body,view,owner,output,selected_handle(~S,index,handles))
-def task_output_taken(~S:Data,~Permit:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),output:O,resource:R,+handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+mode:Mode,+selected:List<&2,U32>,result:Layout.subtree_rest(~S,layout,route) & Product.Owner<Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}})>,Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}})>>,+lifecycleView:Notice.View<S>) -> Task.Task<S,Permit,State.Scope<S,C,R> & (O & Report<E>)>:
+    case owner None{}:Effects.pure(~F,(Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)),effects,(owner,(output,None{})))
+    case Layout.Viewed{payload,_} Some{handle}:Effects.map(~F,Layout.query_output(layout,route) & (O & Maybe<&2,E>),(Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)),effects,body(handle,view,payload,output),result=>Layout.rewritten(Layout.query_output(layout,route),Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),O & Maybe<&2,E>,Layout.initialize(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),result))
+def sequential_output_body(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~layout:Layout.Layout,~route:Layout.Route,~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),handles:List<&2,W.Handle<S>>,index:U32,view:Layout.query_view(layout,route),owner:Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),output:O) -> F(Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}) & (O & Maybe<&2,E>)):
+  sequential_output_body_found(~S,~Permit,~F,~effects,~layout,~route,~O,~E,~body,view,owner,output,selected_handle(~S,index,handles))
+def sequential_output_taken(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),output:O,resource:R,+handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+mode:Mode,+selected:List<&2,U32>,result:Layout.subtree_rest(~S,layout,route) & Product.Owner<Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}})>,Col.Column<S,Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}})>>,+lifecycleView:Notice.View<S>) -> F(State.Scope<S,C,R> & (O & Report<E>)):
   match result:
-    case (rest,Product.Owner{read,write}):Task.TBind{Q.OutputRun<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),O,E>,Q.with_task_output(~S,~Permit,~Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),~Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),~O,~Layout.query_view(layout,route),~List<&2,W.Handle<S>>,~E,~Layout.read(~Layout.query_input(layout,route),~Layout.query_view(layout,route)),~task_output_body(~S,~Permit,~layout,~route,~O,~E,~body),~split,~merge,handles,read,write,output,0,tick,selection(mode,selected,prior),mode_parallel(mode)),result=>Task.TDone{output_returned(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,rest,resource,handles,tick,prior,result,lifecycleView)}}
-def task_output_invoke_targets(~S:Data,~Permit:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O,targets:Index.TargetCheck<S>) -> Task.Task<S,Permit,State.Scope<S,C,R> & (O & Report<E>)>:
+    case (rest,Product.Owner{read,write}):Effects.map(~F,Q.OutputRun<S,Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),O,E>,(State.Scope<S,C,R> & (O & Report<E>)),effects,Q.effect_with_output(~S,~F,~effects,~Layout.stored(Layout.subtree(layout,route),Layout.InLeft{Layout.AtLeaf{}}),~Layout.stored(Layout.subtree(layout,route),Layout.InRight{Layout.AtLeaf{}}),~O,~Layout.query_view(layout,route),~List<&2,W.Handle<S>>,~E,~Layout.read(~Layout.query_input(layout,route),~Layout.query_view(layout,route)),~sequential_output_body(~S,~Permit,~F,~effects,~layout,~route,~O,~E,~body),handles,read,write,output,0,tick,selection(mode,selected,prior)),result=>output_returned(~S,~C,~R,~layout,~route,~same,~shape,~O,~E,rest,resource,handles,tick,prior,result,lifecycleView))
+def sequential_output_invoke_targets(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O,targets:Index.TargetCheck<S>) -> F(State.Scope<S,C,R> & (O & Report<E>)):
   match scope targets:
-    case State.Scope{store,resource,handles,tick,prior,+lifecycleView} Index.Targets{_,Domain.Domain{selected}}:task_output_taken(~S,~Permit,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,output,resource,handles,tick,prior,mode,selected,layout_take(~S,~C,~layout,~route,~same,~shape,store),lifecycleView)
-    case scope Index.Refused{_}:Task.TDone{(scope,(output,LayoutRefused{}))}
-def task_output_invoke(~S:Data,~Permit:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O) -> Task.Task<S,Permit,State.Scope<S,C,R> & (O & Report<E>)>:
+    case State.Scope{store,resource,handles,tick,prior,+lifecycleView} Index.Targets{_,Domain.Domain{selected}}:sequential_output_taken(~S,~Permit,~F,~effects,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,output,resource,handles,tick,prior,mode,selected,layout_take(~S,~C,~layout,~route,~same,~shape,store),lifecycleView)
+    case scope Index.Refused{_}:Effects.pure(~F,(State.Scope<S,C,R> & (O & Report<E>)),effects,(scope,(output,LayoutRefused{})))
+def sequential_output_invoke(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),mode:Mode,scope:State.Scope<S,C,R>,output:O) -> F(State.Scope<S,C,R> & (O & Report<E>)):
   match scope:
-    case State.Scope{store,resource,+handles,tick,prior,+lifecycleView}:task_output_invoke_targets(~S,~Permit,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,mode,State.Scope{store,resource,handles,tick,prior,lifecycleView},output,Index.targets(~S,view_namespace(~S,lifecycleView),handles))
-def task_output_declaration(~S:Data,~Permit:Data,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~valid:{Layout.query_valid(~layout,~route) == True{} : Bool},~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:TaskOutputBody(~S,~Permit,~layout,~route,~O,~E),mode:Mode) -> D.Declaration<S,C,R,TaskOutputOps(~S,~Permit,~O,~E)>:
-  D.Declaration{TaskOutputEach{task_output_invoke(~S,~Permit,~C,~R,~layout,~route,~same,~shape,~O,~E,~split,~merge,~body,mode)},[D.Access{Layout.query_read_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.ReadOnly{}},D.Access{Layout.query_write_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.Writable{}}]}
-def each_task_output(~S:Data,~Permit:Data,~H:Type,~O:Type,~E:Data,cap:TaskOutputEach<S,Permit,H,O,E>) -> H -> O -> Task.Task<S,Permit,H & (O & Report<E>)>:
+    case State.Scope{store,resource,+handles,tick,prior,+lifecycleView}:sequential_output_invoke_targets(~S,~Permit,~F,~effects,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,mode,State.Scope{store,resource,handles,tick,prior,lifecycleView},output,Index.targets(~S,view_namespace(~S,lifecycleView),handles))
+def sequential_output_declaration(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~C:Type,~R:Type,~layout:Layout.Layout,~route:Layout.Route,~same:{C == Layout.columns(~S,layout) : Type},~shape:{Layout.columns(~S,Layout.subtree(layout,route)) == Layout.query_pair(~S,~layout,~route) : Type},~valid:{Layout.query_valid(~layout,~route) == True{} : Bool},~O:Type,~E:Data,~body:SequentialOutputBody(~S,~Permit,~F,~layout,~route,~O,~E),mode:Mode) -> D.Declaration<S,C,R,SequentialOutputOps(~S,~Permit,~F,~O,~E)>:
+  D.Declaration{SequentialOutputEach{sequential_output_invoke(~S,~Permit,~F,~effects,~C,~R,~layout,~route,~same,~shape,~O,~E,~body,mode)},[D.Access{Layout.query_read_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.ReadOnly{}},D.Access{Layout.query_write_key(layout,route),D.ComponentAccess{},D.Exclusive{},D.Writable{}}]}
+def each_sequential_output(~S:Data,~Permit:Data,~F:Type -> Type,~H:Type,~O:Type,~E:Data,cap:SequentialOutputEach<S,Permit,F,H,O,E>) -> H -> O -> F(H & (O & Report<E>)):
   match cap:
-    case TaskOutputEach{run}:run
+    case SequentialOutputEach{run}:run
 
-def TaskGeneralBody(~S:Data,~Permit:Data,~P:Type,~V:Data,~O:Type,~E:Data) -> Type:
-  W.Handle<S> -> V -> P -> O -> Task.Task<S,Permit,P & (O & Maybe<&2,E>)>
+def SequentialGeneralBody(~S:Data,~Permit:Data,~F:Type -> Type,~P:Type,~V:Data,~O:Type,~E:Data) -> Type:
+  W.Handle<S> -> V -> P -> O -> F(P & (O & Maybe<&2,E>))

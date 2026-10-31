@@ -1,217 +1,157 @@
-# Replacement execution API
+# Sequential execution API
 
-The ordinary execution contract is the [SPEC replacement amendment](../SPEC.md#ordinary-execution-replacement-user-amendment-2026-10-26-utc).
-This page names the current application entries and source modules implementing
-that contract. The [capability map](../parity/README.md#replacement-execution-delivery)
-records their implementation ownership. Source-bound observations retain the
-scope of their actual consumers.
+The [sequential execution amendment](../SPEC.md#sequential-execution-user-amendment-2026-10-31-utc)
+defines the ordinary contract. The [execution design](../design/sequential-execution.md)
+describes its ownership and effect boundary. This reference covers the migrated
+single-system and schedule interfaces. Integrated consumer qualification remains
+in progress; module source checks do not establish whole-engine acceptance.
 
 ## Application construction and repeated runs
 
-The ordinary host entry is `world-io.create`. It consumes the resource owner and
-returns `IO(Creation<...>)`. `Created{world}` contains the new World.
-`Refused{resource}` returns the resource owner. Namespace allocation is scoped to
-the host allocator's realm or process. Raw constructors and `with_namespace`
-remain trusted integration operations.
+[`world-io`](../../src/ecs/world-io.bend) supplies host namespace allocation.
+[`world`](../../src/ecs/world.bend) also exposes explicit factory-based creation.
+Creation refusal returns the incoming resource owner. Raw constructors and
+caller-selected namespace construction are trusted integration operations.
 
-The [machine main](../../examples/parallel-machines/main.bend) shows this entry.
-Its `created` continuation initializes the returned World, binds the
-`Scheduled.BuildResult`, and passes `BuildReady{app}` to `execute_prepared`.
-The [scheduled implementation](../../examples/parallel-machines/scheduled.bend)
-retains the returned application through four updates. Construction and execution
-can both return IO, so the caller binds each result before the next operation.
+[`execution-app.define`](../../src/ecs/execution-app.bend) consumes the World,
+system name, and Local. It returns `Built{application}` or
+`BuildRefused{world,local}`. The application retains the registered system and
+actual World. `define_framework` accepts the framework declaration form.
 
-For heterogeneous component and resource layouts,
-[`execution-generalized-root-application`](../../src/ecs/execution-generalized-root-application.bend)
-provides `build` and `run`. `build` takes the actual World, generalized node facts,
-the condition registry, the error handler, dependency edges, and condition
-bindings. It returns `execution-parallel-root-application.Scheduled`.
-`run` consumes that schedule and returns IO containing the updated schedule and
-a `dependency-application.Report`. Repeated runs consume the schedule returned by
-the preceding run.
+`execution-app.run` consumes an application and returns its next application
+paired with `Status`. `Ran{completion}` contains `Success` or `BodyError`;
+`AdmissionRefused` contains no body completion. These operations return ordinary
+values. Host IO remains outside this pure execution interface.
 
-The [health-decay root](../../examples/health-decay/root.bend) supplies concrete
-`build`, `dispatch`, `publish`, and `run` functions. Its `Plan.Edge{lid,rid}`
-orders the spawn author before the query. `Scheduled.configure` supplies
-`execution-deferred-settings.Settings` independently of those dependency edges.
+The [ordinary application](../../examples/ordinary-execution/application.bend)
+retains the returned application across repeated runs and a foreign-World
+refusal. Its [body](../../examples/ordinary-execution/body.bend) retains affine
+Local state and writes before returning a body error.
 
-## Retained system and condition compilation
+## Declarations and body capabilities
 
-[`execution-parallel-system.define_with_compilation`](../../src/ecs/execution-parallel-system.bend)
-consumes a Compilation, the World, a name, and the system's Local owner.
-It returns that Compilation paired with `execution-system.Defined`.
-`Defined{world,system}` contains the registered owner.
-`DefinitionRefused{world,local}` returns the World and the unregistered Local.
-
-`execution-parallel-scope.CompiledBinding` pairs the returned Compilation with
-the registered owner. The retained generalized body adapter is
-`execution-parallel-scope-registry.compile_retained_generalized_leaf`.
-The retained condition adapters are `execution-condition-registry.RetainedSystem`
-and `compile_retained_leaf`, or `compile_retained` for a retained selection.
-The condition registry derives its access metadata from the actual Compilation
-and marks unsupported or writing conditions invalid.
-
-The [captured node definitions](../../examples/parallel-captures/guarded-nodes.bend)
-show the body registration and retained leaf adapters. The
-[guarded application](../../examples/parallel-captures/guarded.bend) shows the
-corresponding condition registration, `CompiledBinding`, and retained dispatch.
-These factories supply a closed construction witness for capability selection.
-That trusted construction boundary does not prove that arbitrary manually built
-bindings agree with a declaration. Current ordinary applications use these
-retained registrations.
-
-## Task bodies and execution policy
+[`execution-builder.Program`](../../src/ecs/execution-builder.bend) selects
+declared capabilities. Its capability family has kind
+`Data -> (Type -> Type) -> Type -> Type`, indexed by permit, effect, and scope.
+Declarations receive the abstract effect constructor and its closed composition
+operations. They can bind those operations into effectful row callbacks.
+The framework declaration form also receives closed reservation provisioning.
 
 [`execution-system.Body`](../../src/ecs/execution-system.bend) receives abstract
-`Permit` and `H` types, declared capabilities, the scope owner, and Local.
-Its result is `execution-reservation-task.Task` containing the returned scope,
-Local, and `Completion`. Both `Success{output}` and `BodyError{error,output}`
-accompany the body's returned owners. A body error retains writes already performed.
-`RunResult.Refused` returns the World and the system without a body completion.
+`Permit`, `F`, and `H`, framework composition operations, declared capabilities,
+the actual scope, and Local. It returns `F(H & (Local & Completion))`.
+`Completion` has `Success{output}` and `BodyError{error,output}` constructors.
 
-[`execution-reservation-task`](../../src/ecs/execution-reservation-task.bend)
-defines `TDone` for a result, `TRun` for a deferred step, `TBind` for a
-continuation, `TFork` for branches and their join, and `TNeed` for a reservation
-request. The framework supplies declaration-bound reservation authority.
-The [event peer body](../../examples/parallel-events/scheduled.bend) uses `TRun`
-to defer its Local update until the executor enters that task.
+[`execution-effects`](../../src/ecs/execution-effects.bend) exposes `pure`,
+`bind`, and `map`. Only `F` is a template parameter to these helpers. Result
+types are ordinary erased arguments, including arbitrary affine Type owners.
+For example, `Effects.pure(~F,Result,effects,value)` lifts an existing result.
+The dictionary contains no interpreter or allocator access.
 
-`Task.Policy` has `Parallel` and `Serial` constructors.
-[`execution-resource-query-group`](../../src/ecs/execution-resource-query-group.bend)
-exposes `run_retained_with_policy`, `run_retained`, and `run_retained_serial`.
-`run_retained` selects `Parallel`. `run_retained_serial` selects `Serial`.
-The [captured node dispatch](../../examples/parallel-captures/guarded-nodes.bend)
-shows both calls on the same retained nodes.
+Ordinary `execution-system.run` checks namespace, registration, and supported
+compilation before clock entry. Refusal retains the incoming World and owner.
+Execution retains returned writes, Local, captures, readers, and commands,
+including body errors. The system cursor advances after an executed return.
 
-The policy reaches `execution-reservation-driver.run_with_policy` and the common
-Task interpreter. Serial lowers each reached `TFork` to left-then-right binds,
-including forks returned by deferred steps. Parallel permits eligible branches
-to use the parallel path. Selecting Parallel alone does not establish that two
-operations execute on different native workers.
+## Commands and query rows
 
-### Taskful query rows
+[`execution-command-permission`](../../src/ecs/execution-command-permission.bend)
+provides declaration-bound structural commands.
+`spawn_field` returns `Q -> Bundle -> F(Q & SpawnAdmission)`.
+`SpawnQueued` contains the actual reserved handle; `SpawnRejected` retains the
+actual bundle and reason. Gameplay does not receive a reservation interpreter.
+The [reservation contract](../design/reservation-production-api.md) defines
+Pending visibility, publication, and cancellation.
 
-`Build.task_general_query` declares a taskful traversal of one sparse component
-route. Its closed `Q.TaskGeneralBody` receives the actual handle, cached view,
-writable payload `P`, and output owner `O`, and returns
-`Task<S,Permit,P & (O & Maybe<&2,E>)>`. It uses the same
-`Q.TaskOutputEach` and `Q.each_task_output` capability described below.
-The declaration specializes the row callback and output split and merge functions.
-`Store.Sparse` is supported. `Store.Whole` returns `LayoutRefused` with the supplied
-scope and output retained. See the [reservation contract](../design/reservation-production-api.md)
-and [Arena player-row consumer](../../examples/arena/spawn.bend).
+[`execution-query`](../../src/ecs/execution-query.bend) separates selection from
+execution. `AllRows` selects admitted rows and `Where` adds a lifecycle filter.
+`SequentialOutputEach` exposes the effectful paired-column traversal through
+`each_sequential_output`. Its operation consumes the scope and output owner and
+returns both with the query report inside the same `F`.
 
-[`Build.task_output_query`](../../src/ecs/execution-builder.bend) declares a
-traversal of paired read and write columns with a taskful row callback and an abstract
-output owner `O`. The callback's `Permit` is the same type supplied to the system
-declaration. The existing `Build.output_query` provides the pure callback path.
+Row callbacks close over composition operations for that fixed enclosing `F`.
+They return the actual writable payload and output owner. Traversal threads one
+output through rows, refreshes returned views, and retains write stamps and row
+errors. Invalid targets or incompatible layouts retain the supplied owners.
 
-[`Q.TaskOutputBody`](../../src/ecs/execution-query.bend) receives the actual row
-handle, a read view, the writable payload, and `O`. It returns
-`Task<S,Permit,Layout.query_output(layout,route) & (O & Maybe<&2,E>)>`.
-`Q.TaskOutputEach<S,Permit,H,O,E>` contains the resulting capability.
-`Q.each_task_output` exposes its `H -> O -> Task<S,Permit,H & (O & Report<E>)>`
-operation. The system body binds that task through the existing Task interpreter
-and Driver before constructing its completion.
+The [shared chunk traversal](../../src/ecs/chunk-query.bend) implements both
+pure and effectful paired rows. The pure entry specializes that traversal with
+the identity effect. It does not split or merge the output owner.
 
-The [chunk traversal](../../src/ecs/chunk-query.bend) sequences rows within each
-chunk. At column branches, the supplied `split` separates the actual output owner
-and `merge` rejoins the returned outputs. Parallel traversal defers both `TFork`
-children with `TRun`. Serial traversal binds the left branch before the right.
-The execution policy described above also applies to these tasks.
+## Registration and lifecycle
 
-The traversal retains the read owner while the callback owns the writable payload
-and output across suspension. The returned payload reconstructs the column and
-updates its write stamp even when the row reports an error. Invalid targets or
-mismatched column layouts return `LayoutRefused` with the supplied scope and output.
+[`execution-system-registration`](../../src/ecs/execution-system-registration.bend)
+contains registration and owner metadata helpers. `define_with_compilation`
+retains the actual Compilation alongside the registration result. Construction
+witnesses are trusted framework provisioning, not a theorem that arbitrary raw
+caps match a manually constructed runtime Compilation.
 
-The existing [output declaration](../../examples/parallel-query/output-declaration.bend)
-binds this capability, and the [command body](../../examples/parallel-query/command-body.bend)
-awaits its result. Its [row callback](../../examples/parallel-query/command-row.bend)
-returns `TDone` after authoring insertion. The six existing modes produce matching
-JavaScript and native output at 9,715 bytes, also matching the prior pure path.
-These observations do not exercise row `TNeed` or Spawn, establish native worker
-participation, complete GH87, or extend the approved helper proofs to the traversal.
+[`execution-retained-system`](../../src/ecs/execution-retained-system.bend)
+keeps the actual Compilation and owner in one existential carrier. Use `pack`
+and `unpack` with their explicit erased types. `map_owner` observes or changes
+the owner while retaining that same Compilation. The consuming `owner` projection
+is for terminal observations that discard the Compilation. Scheduling does not
+recompile a retained system or reconstruct its authority from a witness.
 
-## Returned inventories and registration lifecycle
+Bare system execution does not rotate lifecycle history. A single-system App
+maintains after an executed result, including a body error; admission refusal
+does not maintain. Scheduled completion and deferred publication follow the
+[maintenance contract](../design/execution-lifecycle-maintenance-boundaries.md).
 
-The generalized Root's `Storage.Present` contains the returned World and displaced
-owners. `CutRefused`, `JoinRefused`, and `NestedRefused` retain the corresponding
-administration and physical inventory. These refusal variants are not usable
-Worlds for later conditions or publication. The returned application retains
-those owners rather than constructing a substitute World.
+## Scheduled applications
 
-[`execution-resource-query-lifecycle`](../../src/ecs/execution-resource-query-lifecycle.bend)
-provides `retire`, `release`, `rebuild`, and `reregister` for retained body nodes.
-`Released` contains the actual Compilation, cache context, identity, and Local.
-Retirement refusal returns the World and the node. Re-registration refusal
-returns the World and `Released`. Successful re-registration restores the same
-identity and cursor, then invalidates cached admission for the next inspection.
-The [guarded application](../../examples/parallel-captures/guarded.bend) retires a
-node, attempts another run, re-registers the returned owner, and runs again.
+The scheduled path retains the actual whole World and system owners. Individual
+systems still receive only their declared abstract capabilities. Their declaration
+uses full-World column and resource types with the selected layout routes; the
+framework does not manufacture cut-owner types for invocation.
 
-## Module catalogue
-
-| Application task | Source entries |
+| Module | Responsibility |
 | --- | --- |
-| Create a World and retain its namespace factory | [world-io](../../src/ecs/world-io.bend), [world](../../src/ecs/world.bend) |
-| Declare component and resource layouts | [execution-composer-schema](../../src/ecs/execution-composer-schema.bend), [execution-composer-layout](../../src/ecs/execution-composer-layout.bend) |
-| Compile access declarations and retain their actual capabilities | [execution-builder](../../src/ecs/execution-builder.bend), [execution-resource-program](../../src/ecs/execution-resource-program.bend), [execution-declaration](../../src/ecs/execution-declaration.bend) |
-| Define returned success or body error and reservation tasks | [execution-system](../../src/ecs/execution-system.bend), [execution-reservation-task](../../src/ecs/execution-reservation-task.bend) |
-| Select query families and lifecycle filters | [execution-query](../../src/ecs/execution-query.bend), [execution-query-recipe](../../src/ecs/execution-query-recipe.bend) |
-| Retain query systems and compose compatible groups | [execution-resource-query-leaf](../../src/ecs/execution-resource-query-leaf.bend), [execution-resource-query-group](../../src/ecs/execution-resource-query-group.bend), [execution-resource-query-composite](../../src/ecs/execution-resource-query-composite.bend) |
-| Register owners and build an application schedule | [execution-parallel-scope-registry](../../src/ecs/execution-parallel-scope-registry.bend), [execution-generalized-root-application](../../src/ecs/execution-generalized-root-application.bend) |
-| Declare conditions, dependencies, and deferred policy | [execution-condition-registry](../../src/ecs/execution-condition-registry.bend), [dependency-plan](../../src/ecs/dependency-plan.bend), [execution-deferred-settings](../../src/ecs/execution-deferred-settings.bend) |
-| Compose schema fragments and checked feature provisions | [schema-fragments](../../src/ecs/schema-fragments.bend), [feature](../../src/ecs/feature.bend), [execution-composer-schema](../../src/ecs/execution-composer-schema.bend) |
-| Author commands through declared permissions | [execution-command-system](../../src/ecs/execution-command-system.bend), [execution-command-permission](../../src/ecs/execution-command-permission.bend), [execution-generalized-command-leaf](../../src/ecs/execution-generalized-command-leaf.bend) |
-| Bind relation resources to the original World context | [execution-relation-schema-setup](../../src/ecs/execution-relation-schema-setup.bend), [execution-relation-context](../../src/ecs/execution-relation-context.bend) |
-| Read relations or author relation and lifetime-scope operations | [execution-relation-access](../../src/ecs/execution-relation-access.bend), [execution-lifetime-scope-command](../../src/ecs/execution-lifetime-scope-command.bend) |
-| Use component states and retained machines | [execution-machine-component](../../src/ecs/execution-machine-component.bend), [execution-machine-access](../../src/ecs/execution-machine-access.bend) |
-| Publish and read owned event families | [execution-event-family](../../src/ecs/execution-event-family.bend), [execution-event-ops](../../src/ecs/execution-event-ops.bend) |
-| Inspect actual owners without advancing system cursors | [execution-inspector](../../src/ecs/execution-inspector.bend), [execution-inspector-application](../../src/ecs/execution-inspector-application.bend) |
-| Save eligible data or stage and publish a restore | [execution-save-plan](../../src/ecs/execution-save-plan.bend), [execution-save-world](../../src/ecs/execution-save-world.bend), [execution-save-gate](../../src/ecs/execution-save-gate.bend), [execution-restore-stage](../../src/ecs/execution-restore-stage.bend), [execution-restore-publication](../../src/ecs/execution-restore-publication.bend) |
-| Use explicit application-owned recovery | [recoverable-component](../../src/ecs/recoverable-component.bend), [execution-recoverable-component](../../src/ecs/execution-recoverable-component.bend) |
+| [`dependency-registration`](../../src/ecs/dependency-registration.bend) | One affine registry, shared product composition, scalar registration-ID dispatch and condition registry. |
+| [`execution-registry`](../../src/ecs/execution-registry.bend) | Derives deferred-system IDs from actual command registrations and combines their facts with the common registry. |
+| [`execution-generalized-system-leaf`](../../src/ecs/execution-generalized-system-leaf.bend) | Ordinary retained Compilation and system owner, schema admission and fixed-deny invocation. |
+| [`execution-generalized-command-leaf`](../../src/ecs/execution-generalized-command-leaf.bend) | Retained command owner, actual permission checks, pending detection and publication. |
+| [`execution-condition-registry`](../../src/ecs/execution-condition-registry.bend) | Read-only condition admission and the same common registry composition. |
+| [`execution-schedule`](../../src/ecs/execution-schedule.bend) | Retained schedule state, ordered invocation, returned reports and deferred settings. |
+| [`execution-generalized-root-application`](../../src/ecs/execution-generalized-root-application.bend) | Builds the application from actual registrations and conditions, validates dependencies and bindings, and maintains lifecycle once after Finished. |
 
-The [scheduled-health application](../../examples/scheduled-health/README.md)
-starts with declaration-derived access and retained command and query owners.
-The [captured-query application](../../examples/captured-query/README.md) shows
-partial writes after a returned error, affine capture retention, and `Changed`.
-The [original mixed applications](../design/execution-original-applications.md)
-retain their actual owners through explicit recovery, event publication, graph
-commands, and passive inspection. AppB deliberately selects serial execution
-and observes its pending machine state without applying a transition.
-The modules above preserve the distinction between trusted schema setup and the
-abstract capabilities available inside a system body.
+With the application module imported as `General`, `General.build` consumes
+registry facts, the condition registry, handler, dependency
+edges and condition bindings. The resulting schedule retains those actual owners.
+`General.run` returns the next schedule and report directly. Host printing remains
+an outer IO operation. There is no execution-policy or fork parameter.
 
-## Legacy source removal
+Deferred settings control automatic dependency publication, ignored publication
+edges, explicit synchronization and final application. Required synchronization
+runs before the dependent condition. Returned body errors retain completion and
+pending commands before handler selection. Stopped and Invalid retain returned
+owners and pending work without final publication or lifecycle maintenance.
 
-The obsolete transactional query runners, `transaction`, `ordinary-system`, and
-their ordinary application execution adapters are removed from current package
-source. Shared component, resource, machine, event, and relation metadata retain
-their original nominal type identities for replacement consumers.
+`Schedule.create` builds the deferred graph once. `Schedule.configure` rebuilds
+it when graph settings change while retaining the actual state and pending IDs.
+Ordinary runs reuse that graph. `Schedule.set_final_apply` changes only final
+publication and retains the existing compiled graph. Raw constructors remain
+trusted; reconstructing settings manually must preserve their compiled metadata.
+The retained metadata also includes publication order from the compiled plan.
+At each boundary, known pending IDs are deduplicated and applied in that order.
+Unknown IDs retain their original relative order and multiplicity in the pending
+suffix. A boundary with no known pending IDs does not invoke publication.
 
-The historical simulation and Workshop callers remain available with their
-runtime at the [qualified source revision](https://github.com/dearlordylord/bendvy/tree/1037bab017fcc8037c518fa5d89dfa0c28e9ee30).
-Their scenario, reference, expected data, and verifier files retain their original
-contract. The old rollback checkpoints do not qualify the replacement executor.
+`General.run_bound` and its observed form check the actual relation Context
+before any schedule action. Refusal returns the bound owners and pending state
+with `ContextRefused`; the observed form returns no fabricated boundary events.
+The [relation-failure completion adapter](../../src/ecs/execution-relation-failure-root-completion.bend)
+composes lifecycle maintenance with Finished-only failure-stream retention.
+These changed entries still need integrated consumer qualification; their old
+receipts do not qualify the new source.
 
-The original parallel-composition consumer now uses the retained Taskful Feature
-assembly. The obsolete `feature-legacy`, `schedule-provision`, `schedule` and
-`system` executor island is removed from package source. Public Feature metadata,
-pure `feature-provision` declared-access binding and current registration lifecycle
-operations remain available; the application-owned AppA Journal recovery is
-separate from ordinary execution. Historical fixture builders retain their
-[original source checkout](../../test-fixtures/HISTORICAL.md).
+Retained system restoration uses `SysLife.restore_with_compilation` with the
+actual held Compilation. It returns that artifact on success and refusal and
+preserves the namespace, registration-ID, collision, support and access checks.
+The basic convenience entry compiles once and delegates to the same restoration
+path; it does not replace the selected interpreter of a retained application.
 
-The unconsumed old owned-event staging, Array journal, single-column recovery,
-and bundle installation and undo modules are also retired. Their module paths no
-longer appear in the package. The live explicit recovery facility consists of
-`recoverable-component`, `execution-recoverable-component`, and `recovery-journal`.
-AppA calls it directly before ordinary gameplay. It does not determine the Root
-schedule's error or publication policy.
-
-The BendHub exporter includes all remaining source files under `src/ecs`, even
-when the aggregate does not import them. Remaining pure helpers have not been
-classified as obsolete merely because current applications do not import them.
-This source removal does not establish successful execution of every current
-consumer or extend the five approved helper laws to the whole ECS.
+The [core map](core-map.md) describes component, resource, event, relation,
+machine, inspection, recovery, and persistence facilities. Source-bound
+observations and approved laws retain their exact subjects and limits. They do
+not establish successful execution of every changed consumer.

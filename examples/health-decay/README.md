@@ -50,7 +50,8 @@ rendering the initial values. Each Tick then runs the decay system.
 three output lines with `expected.stdout`, and builds the browser API. It does
 not execute the browser adapter.
 
-The CLI and browser API were emitted and run on JavaScript after migration.
-These are finite application observations, not formal proofs. The preserved
+The sequential CLI passed its complete existing expected output on JavaScript
+and native with one worker. The browser API was emitted. These are finite
+application observations, not formal proofs. The preserved
 legacy smoke files use the earlier synchronous API. Their source binding is
 documented in the [browser demonstration](demo/README.md).

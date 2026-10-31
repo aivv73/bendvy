@@ -7,6 +7,7 @@ approval boundaries. Do not infer a new contract from an experimental layout.
 
 | Subject | Design or contract | Evidence and limits |
 | --- | --- | --- |
+| Sequential execution and retained ECS behavior | [Execution design](sequential-execution.md), [conditions](execution-conditions.md), [lifecycle ownership](execution-lifecycle-notices.md) | The [current API](../reference/execution-api.md) distinguishes migrated entries from remaining integration work. Historical receipts do not qualify changed sources. |
 | Query selection, cardinality and access | [Public query contract](public-query-contract.md), [query composition](../reference/query-composition-contract.md) | [Query contract report](https://github.com/dearlordylord/bendvy/blob/b50440d867dbeafbcdd475ac8ee1dd73b48210bd/docs/reports/public-query-contract.md), [composition report](https://github.com/dearlordylord/bendvy/blob/b50440d867dbeafbcdd475ac8ee1dd73b48210bd/docs/reports/query-composition.md) |
 | Affine components and closed capabilities | [User-system API](user-system-api.md), [owned query proposal](cohesive-owned-query.md) | [User-system evidence](https://github.com/dearlordylord/bendvy/blob/b50440d867dbeafbcdd475ac8ee1dd73b48210bd/docs/reports/user-system-api.md); proposals do not establish universal refinement |
 | Persistent per-instance Local | [Selected Local policy](public-local-policy.md) | [Local report](https://github.com/dearlordylord/bendvy/blob/b50440d867dbeafbcdd475ac8ee1dd73b48210bd/docs/reports/public-local-owner.md); World rollback and Local persistence are separate |
@@ -24,8 +25,9 @@ approval boundaries. Do not infer a new contract from an experimental layout.
   questions. Fewer allocations do not establish a speedup; compare equivalent
   work with the unchanged observation oracle.
 - Representation changes must preserve arbitrary affine payloads, identity,
-  order, lifecycle visibility and exact rollback. A successful small fixture does
-  not establish the general public API.
+  order and lifecycle visibility under the governing failure contract. The
+  sequential executor retains writes on returned body errors. A successful
+  small fixture does not establish the general public API.
 - Historical proposals to improve against an old Bend baseline are distinct from
   the agreed product goals against bevy-ts. Old time windows and attempt counters
   never authorize another run.

@@ -10,8 +10,7 @@ import ../../src/ecs/execution-inspector-component.bend as Columns
 import ../../src/ecs/execution-composer-layout.bend as L
 import ../../src/ecs/component.bend as Component
 import ../../src/ecs/capabilities.bend as Cap
-import ../../src/ecs/execution-generalized-root-application.bend as General
-import ../../src/ecs/execution-parallel-root-application.bend as Scheduled
+import ../../src/ecs/execution-schedule.bend as Scheduled
 import ../../src/ecs/dependency-application.bend as App
 
 type Reads<-H:Type> is Type:
@@ -48,10 +47,6 @@ def body(~H:Type,~caps:Ops(H),_:Unit,frame:H) -> H & Result<&2,&2,Unit,Snapshot>
 def observed(rebuild:D.World() -> Root.Application(),result:I.Observed<D.Schema,D.Columns(),D.Resources(),Unit,Unit,Snapshot>) -> Root.Application() & (I.Instance<D.Schema> & Result<&2,&2,Unit,Snapshot>):
   match result:
     case I.Observed{world,instance,result}:(rebuild(world),(instance,result))
-def storage(rebuild:General.Storage<D.Schema,D.components(),D.resources(),Unit> -> Root.Application(),instance:I.Instance<D.Schema>,storage:General.Storage<D.Schema,D.components(),D.resources(),Unit>) -> Root.Application() & (I.Instance<D.Schema> & Result<&2,&2,Unit,Snapshot>):
-  match storage:
-    case General.Present{world,displaced}:observed(world => rebuild(General.Present{world,displaced}),I.passive(~D.Schema,~D.Columns(),~D.Resources(),~Unit,~Ops,~Unit,~Unit,~(Snapshot),~plan(),~body,instance,Unit{},world))
-    case storage:(rebuild(storage),(instance,Fail{Unit{}}))
 def snapshot(app:Root.Application(),instance:I.Instance<D.Schema>) -> Root.Application() & (I.Instance<D.Schema> & Result<&2,&2,Unit,Snapshot>):
   match app:
-    case Scheduled.Scheduled{App.State{world,nodes,guards,handler,stateBindings},plan,bindings,rules,deferred}:storage(world => Scheduled.Scheduled{App.State{world,nodes,guards,handler,stateBindings},plan,bindings,rules,deferred},instance,world)
+    case Scheduled.Scheduled{App.State{world,nodes,guards,handler,stateBindings},settings,bindings,deferred}:observed(world => Scheduled.Scheduled{App.State{world,nodes,guards,handler,stateBindings},settings,bindings,deferred},I.passive(~D.Schema,~D.Columns(),~D.Resources(),~Unit,~Ops,~Unit,~Unit,~(Snapshot),~plan(),~body,instance,Unit{},world))

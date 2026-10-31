@@ -3,7 +3,7 @@ import ./execution-save-data.bend as Saved
 import ./execution-save-recipe.bend as Recipe
 import ./execution-composer-layout.bend as Layout
 import ./chunk-column.bend as Column
-import ./chunk-partition.bend as Part
+import ./chunk-shape.bend as Part
 import ./execution-query-identity.bend as Index
 import ./lifecycle.bend as Life
 import ./decode-data.bend as D

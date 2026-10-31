@@ -1,4 +1,4 @@
-> Verification policy override (2026-10-27): semantic verification uses Bend laws only. The new non-law models, reference tests, golden outputs and check scripts have been retired at the user's direction. References below to those checks describe historical work, not current acceptance. Historical receipts remain outside the source tree; the five approved Bend helper laws do not prove the whole ECS.
+> Historical verification record (2026-10-27). The then-new models, reference tests, golden outputs, and check scripts were retired at the user's direction. References to those checks describe historical work, not current acceptance. Current verification follows [agent workflow](../agent-workflow.md). Approved helper laws do not prove the whole ECS.
 
 # GH84 ordinary event delivery handoff
 
@@ -23,7 +23,7 @@ The executed consumer source is commit
 - [Operations](../../src/ecs/execution-event-ops.bend) wrap canonical builder
   grants. Ordinary reads use ResourceRead and modify only the actual token in
   System Local. Publisher/admin use ResourceWrite.own for Type outcomes.
-- [Consumer](../../examples/parallel-events/README.md) runs actual registered
+- [Consumer](../../examples/event-systems/README.md) runs actual registered
   publishers, independent readers, admin, condition, peer, and error-handler
   capture through the ordinary public root schedule. Overlapping family readers
   remain conservatively Exclusive/ReadOnly. No shared affine log view is claimed.
@@ -53,7 +53,7 @@ IO finalizer was approved or established by this delivery.
 
 ## Complete backend observations
 
-[ORACLE.md](../../examples/parallel-events/ORACLE.md) was derived before capture.
+[ORACLE.md](../../examples/event-systems/ORACLE.md) was derived before capture.
 The original aggregate oracle's metadata correction is explicitly recorded there.
 The original pre-correction files retain their first frozen hashes:
 
@@ -110,7 +110,7 @@ observations rather than qualified successful native evidence.
 ## Next exact gates
 
 The unexecuted normal wrapper is
-[check.sh](../../examples/parallel-events/check.sh), SHA256
+[check.sh](../../examples/event-systems/check.sh), SHA256
 `dc08e87a5aac27352b3a890f3fd77324b9e694329f052b0b5bd69e82d19e913e`.
 Its changed eleven-control/five-concrete-case contract needs final independent
 launch review before first execution or publication. Round 1 approved only the

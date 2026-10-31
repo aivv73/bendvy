@@ -7,7 +7,7 @@ import ./execution-deferred-schedule.bend as Deferred
 import ./trace-facts.bend as Facts
 
 # Report observations carry actual outcomes, but no entry/exit timestamps or
-# barrier receipts. This adapter deliberately emits only those reached facts.
+# boundary receipts. This adapter deliberately emits only those reached facts.
 def events(~Error:Data,~Out:Data,observations:List<&2,Executor.Observation<Error,Out>>) -> List<&2,Trace.TraceEvent<Error>>:
   match observations:
     case []:[]
@@ -38,7 +38,7 @@ def read(~Error:Data,~Out:Data,on:Bool,plan:Plan.Build<String>,+report:Applicati
     case True{}:(report,enabled(~Error,~Out,plan,report))
 
 # Boundary and system-outcome batches are separate ordered projections. Their
-# inputs do not establish an interleaving between workers and barrier callbacks.
+# inputs do not establish a merged chronology of system outcomes and boundaries.
 def boundary_events(~Error:Data,values:List<&2,Deferred.Boundary>) -> List<&2,Trace.TraceEvent<Error>>:
   match values:
     case []:[]

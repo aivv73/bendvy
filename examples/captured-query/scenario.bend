@@ -27,13 +27,13 @@ def last(result:A.Application() & App.Report<B.Error,String>) -> IO(Unit):
     case (app,events):IO.bind(Unit,Unit,IO.print("no-change-result|" ++ report(events) ++ "\n"),_ => end(O.snapshot(app)))
 def retried(result:A.Application() & String) -> IO(Unit):
   match result:
-    case (app,text):IO.bind(Unit,Unit,IO.print("retry|" ++ text ++ "\n"),_ => IO.bind(A.Application() & App.Report<B.Error,String>,Unit,A.run(app),last))
+    case (app,text):IO.bind(Unit,Unit,IO.print("retry|" ++ text ++ "\n"),_ => last(A.run(app)))
 def retry_result(result:A.Application() & App.Report<B.Error,String>) -> IO(Unit):
   match result:
     case (app,events):IO.bind(Unit,Unit,IO.print("retry-result|" ++ report(events) ++ "\n"),_ => retried(O.snapshot(app)))
 def retry(result:A.Application() & String) -> IO(Unit):
   match result:
-    case (app,_):IO.bind(A.Application() & App.Report<B.Error,String>,Unit,A.run(app),retry_result)
+    case (app,_):retry_result(A.run(app))
 def failed(result:A.Application() & String) -> IO(Unit):
   match result:
     case (app,text):IO.bind(Unit,Unit,IO.print("failure|" ++ text ++ "\n"),_ => retry((O.retry(app),"")))
@@ -42,7 +42,7 @@ def first(result:A.Application() & App.Report<B.Error,String>) -> IO(Unit):
     case (app,events):IO.bind(Unit,Unit,IO.print("failure-result|" ++ report(events) ++ "\n"),_ => failed(O.snapshot(app)))
 def start(result:A.Application() & String) -> IO(Unit):
   match result:
-    case (app,text):IO.bind(Unit,Unit,IO.print("initial|" ++ text ++ "\n"),_ => IO.bind(A.Application() & App.Report<B.Error,String>,Unit,A.run(app),first))
+    case (app,text):IO.bind(Unit,Unit,IO.print("initial|" ++ text ++ "\n"),_ => first(A.run(app)))
 def defined(result:A.Definition) -> IO(Unit):
   match result:
     case A.DefinitionReady{app}:start(O.snapshot(app))

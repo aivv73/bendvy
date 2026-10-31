@@ -8,7 +8,6 @@ import ./execution-composer-layout.bend as L
 import ./world.bend as W
 import ./entity-key.bend as K
 import ./indexed-lifecycle.bend as Indexed
-import ./chunk-partition.bend as Part
 import ./chunk-column.bend as Col
 
 type Granted<-S:Data,-WC:Type> is Data:
@@ -60,7 +59,7 @@ def physical_cons(offset:U32,rest:List<&2,U32>,fits:Bool) -> List<&2,U32>:
     case False{}:rest
     case True{}:offset <> rest
 # Beyond-storage optional absence remains in Granted.handles. Only physical
-# owners/cache cells that actually exist contribute physical cut domains.
+# owners that actually exist contribute physical-domain validation metadata.
 def physical_checked(capacity:U32,rest:List<&2,U32>,offset:Maybe<&2,U32>) -> List<&2,U32>:
   match offset:
     case None{}:rest
@@ -113,7 +112,7 @@ def lower_checked(~S:Data,~WC:Type,~full:L.Layout,recipes:List<&2,Recipe.Recipe<
     case False{}:LoweringRefused{}
     case True{}:lowered(~S,~WC,~full,lower_entries(~S,~WC,recipes,info,handles))
 def lower(~S:Data,~WC:Type,~full:L.Layout,~same:{WC == L.columns(~S,full) : Type},+recipes:List<&2,Recipe.Recipe<S,WC>>,+info:List<&2,Schema.Info>,namespace:U32,+handles:List<&2,W.Handle<S>>) -> Lowering<S,WC,full>:
-  lower_checked(~S,~WC,~full,recipes,info,handles,Bool.and(handles_valid(~S,namespace,handles),Bool.and(Id.unique(~S,handles),Bool.and(Part.inventory_valid(D.validate(U32.add(Col.maximum_capacity(),1),D.Domain{public_indexes(~S,handles)})),recipes_valid(~S,~WC,~full,recipes)))))
+  lower_checked(~S,~WC,~full,recipes,info,handles,Bool.and(handles_valid(~S,namespace,handles),Bool.and(Id.unique(~S,handles),Bool.and(Match.inventory_valid(D.validate(U32.add(Col.maximum_capacity(),1),D.Domain{public_indexes(~S,handles)})),recipes_valid(~S,~WC,~full,recipes)))))
 
 def same_kind(left:Recipe.QueryKind,right:Recipe.QueryKind) -> Bool:
   match left right:

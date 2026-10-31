@@ -1,17 +1,19 @@
 # Reservation and spawn execution
 
-The ordinary command path supports taskful system bodies and query rows.
+The sequential migration preserves reservation in system bodies and query rows.
+This document states the selected contract; changed consumers still need
+qualification under the [sequential design](sequential-execution.md).
 A declaration supplies structural permission and a closed spawn operation through
 `execution-command-permission`. The operation consumes the caller's actual command
 queue and layout-indexed bundle. Resources are outside that bundle.
 
 ## Reservation ownership
 
-[`Task.TNeed`](../../src/ecs/execution-reservation-task.bend) suspends the caller
-with its declaration-bound permit. The driver takes the actual allocator from
-World administration into one `Issuer` and returns it after service. Parallel
-`TFork` branches retain separate payload and queue owners. Request service threads
-the same issuer through the branches; it does not duplicate the allocator.
+The framework supplies declaration-bound operations through an abstract effect
+constructor. Its sole sequential implementation threads the actual allocator
+through invocation state. Gameplay can compose effects with pure, bind, and map;
+it cannot interpret them with a replacement reservation handler. The ordinary
+entry returns allocator ownership to World administration after invocation.
 
 [`Buffer.spawn`](../../src/ecs/execution-command-buffer.bend) returns
 `SpawnQueued{handle}` only after staging `Spawn{handle,bundle}` in that queue.
@@ -21,7 +23,7 @@ input bundle and queue retained. No temporary identifier needs later remapping.
 
 A reserved entity is Pending. Ordinary live queries do not include it until
 publication. The current query keeps the live handles captured at admission,
-including when its callback suspends for another reservation.
+including when its callback requests another reservation.
 
 ## Publication and errors
 
@@ -41,8 +43,8 @@ A refused publication returns the World, handle, actual bundle, and typed reason
 It does not implicitly cancel the reservation or partially install the bundle.
 
 An ordinary handled body error retains commands already authored in the owner's
-queue. The Task path completes peer ownership joins before the framework applies
-its error policy. Whether commands are published depends on the existing schedule
+queue. Sequential execution returns those actual owners before the framework
+applies its error policy. Whether commands are published depends on the schedule
 and barrier settings. This behavior does not promise recovery from a fatal host
 exception or process termination.
 
@@ -52,19 +54,15 @@ allocator progress or returning that index to the free list. This metadata opera
 does not consume a separately retained command queue or bundle. Restore-wide
 cancellation is defined separately in `restore-world.bend`.
 
-## Taskful query scope
+## Sequential query scope
 
-`Build.task_output_query` supports the paired-column taskful traversal.
-`Build.task_general_query` supports a sparse unary component route with an actual
-payload, cached view, and caller-owned output. Both use `Q.TaskOutputEach` and
-`Q.each_task_output`, with the same abstract scope and permit supplied by the
-system declaration. Closed split and merge callbacks divide and rejoin the output
-owner; row callbacks return the actual payload through the Task continuation.
-
-The generalized task path currently supports `Store.Sparse`. Its `Store.Whole`
-branch returns `LayoutRefused` with the supplied scope and output untouched.
-This API does not provide arbitrary taskful whole-layout traversal. Sparse traversal
-refreshes each returned view and write stamp and retains row errors in its report.
+Rows use the same abstract effect constructor supplied to their system body.
+Traversal owns the actual payload, cached view, and caller output. It threads one
+output owner through the persistent columns and returns each actual payload before
+advancing. It needs neither output split/merge callbacks nor a second prepared
+storage tree. Returned views and write stamps retain their ordinary update rules,
+and row errors remain in the traversal report. Unsupported layout admission must
+retain the supplied owners and report its precise reason.
 
 The [Arena spawn consumer](../../examples/arena/spawn.bend) bootstraps entities in
 the system body, then uses the saved actual player handle to select the player row
@@ -72,6 +70,5 @@ for projectile requests. Other rows preserve their owners. The first natural fra
 authors two requests sequentially from that player row. Their returned handles are
 retained in the spawn owner, and publication makes the new bodies visible to Step.
 
-These are source contracts. Selecting a parallel policy does not establish native
-worker participation, concurrent allocator ownership, or a speedup. Runtime receipts
-and approved proofs have their own finite scopes.
+These are selected semantic contracts. Runtime receipts and approved proofs retain
+their exact source-bound scopes; this design document establishes no speedup.

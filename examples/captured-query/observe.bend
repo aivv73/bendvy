@@ -5,14 +5,9 @@ import ./audit.bend as Audit
 import ./app.bend as A
 import ./payload.bend as P
 import ../../src/ecs/world.bend as W
-import ../../src/ecs/execution-resource-query-leaf.bend as Leaf
-import ../../src/ecs/execution-parallel-scope.bend as Scope
-import ../../src/ecs/execution-resource-query-execution.bend as Execution
-import ../../src/ecs/execution-compiled-binding.bend as Binding
-import ../../src/ecs/execution-prepared.bend as Prep
+import ../../src/ecs/execution-retained-system.bend as Retained
 import ../../src/ecs/execution-system.bend as Sys
 import ../../src/ecs/execution-declaration.bend as Decl
-import ../../src/ecs/execution-resource-admission.bend as Admission
 import ../../src/ecs/change-tick.bend as Tick
 import ../../src/ecs/owner-product.bend as Product
 import ../../src/ecs/inspector.bend as I
@@ -23,18 +18,15 @@ import ../../src/ecs/execution-composer-layout.bend as L
 import ../../src/ecs/execution-command-publication.bend as Publish
 import ../../src/ecs/execution-command-buffer.bend as Buffer
 import ../../src/ecs/execution-generalized-root-application.bend as General
-import ../../src/ecs/execution-parallel-root-application.bend as Root
+import ../../src/ecs/execution-schedule.bend as Root
+import ../../src/ecs/dependency-registration.bend as Reg
 import ../../src/ecs/dependency-application.bend as App
 
 def rebuilt(~Owner:Type,~Node:Type,rebuild:Owner -> Node,result:Owner & String) -> Node & String:
   match result:
     case (owner,text):(rebuild(owner),text)
-def node(~Compilation:Type,~World:Type,~Owner:Type,~Evidence:Data,~Permit:Data,observe:Owner -> Owner & String,held:Leaf.Node<Compilation,World,Owner,Evidence,Permit>) -> Leaf.Node<Compilation,World,Owner,Evidence,Permit> & String:
-  match held:
-    case Leaf.Uninspected{Scope.CompiledBinding{compilation,owner}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,owner=>Leaf.Uninspected{Scope.CompiledBinding{compilation,owner}},observe(owner))
-    case Leaf.Inspected{Scope.CompiledBinding{compilation,owner},evidence,id,valid}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,owner=>Leaf.Inspected{Scope.CompiledBinding{compilation,owner},evidence,id,valid},observe(owner))
-    case Leaf.Prepared{Execution.HeldReady{Binding.Binding{compilation,Prep.Prepared{namespace,owner,permits,provenance},evidence}}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,owner=>Leaf.Prepared{Execution.HeldReady{Binding.Binding{compilation,Prep.Prepared{namespace,owner,permits,provenance},evidence}}},observe(owner))
-    case Leaf.Prepared{Execution.HeldInventory{compilation,Prep.Inventory{owner,provenance},evidence}}:rebuilt(~Owner,~Leaf.Node<Compilation,World,Owner,Evidence,Permit>,owner=>Leaf.Prepared{Execution.HeldInventory{compilation,Prep.Inventory{owner,provenance},evidence}},observe(owner))
+def node(~Compilation:Type,~Owner:Type,observe:Owner -> Owner & String,held:Retained.CompiledBinding<Compilation,Owner>) -> Retained.CompiledBinding<Compilation,Owner> & String:
+  Retained.map_owner(Compilation,Owner,String,observe,held)
 def args(retry:Bool,value:B.Args) -> B.Args:
   match retry:
     case True{}:B.Args{999}
@@ -49,15 +41,15 @@ def audit_owner(owner:Audit.Owner()) -> Audit.Owner() & String:
   match owner:
     case Sys.Owner{+ns,+id,+name,+access,+cursor,local}:(Sys.Owner{ns,id,name,access,cursor,local},"namespace=" ++ U32.show(ns) ++ ";id=" ++ U32.show(id) ++ ";name=" ++ name ++ ";access=" ++ List.show(&2,String,x => x,access) ++ ";cursor=" ++ Tick.cursor_show(cursor))
 def audit_node(held:Audit.Node()) -> Audit.Node() & String:
-  node(~Decl.Compilation<S.Workshop,S.Store(~S.Workshop),B.C(),B.R(),Audit.Ops>,~S.World(~S.Workshop),~Audit.Owner(),~Admission.Evidence<S.Workshop,S.components(),S.resources(),B.C(),B.R(),Audit.Ops,Audit.kernel>,~Prep.Permit<S.Workshop,S.Store(~S.Workshop)>,audit_owner,held)
+  node(~Decl.Compilation<S.Workshop,S.Store(~S.Workshop),B.C(),B.R(),Audit.Ops>,~Audit.Owner(),audit_owner,held)
 def query_node(retry:Bool,held:B.Node()) -> B.Node() & String:
-  node(~Decl.Compilation<S.Workshop,S.Store(~S.Workshop),B.C(),B.R(),B.Ops>,~S.World(~S.Workshop),~B.Owner(),~Admission.Evidence<S.Workshop,S.components(),S.resources(),B.C(),B.R(),B.Ops,B.kernel>,~Prep.Permit<S.Workshop,S.Store(~S.Workshop)>,query_owner(retry),held)
-def joined(left:Audit.Node() & String,right:B.Node() & String) -> A.Nodes() & String:
+  node(~Decl.Compilation<S.Workshop,S.Store(~S.Workshop),B.C(),B.R(),B.Ops>,~B.Owner(),query_owner(retry),held)
+def joined(ids:List<&2,U32>,left:Audit.Node() & String,right:B.Node() & String) -> A.Nodes() & String:
   match left right:
-    case (left,a), (right,b):(Product.Owner{left,right},"audit={" ++ a ++ "};captured={" ++ b ++ "}")
+    case (left,a), (right,b):(Reg.Product{left,right,ids},"audit={" ++ a ++ "};captured={" ++ b ++ "}")
 def nodes(retry:Bool,held:A.Nodes()) -> A.Nodes() & String:
   match held:
-    case Product.Owner{left,right}:joined(audit_node(left),query_node(retry,right))
+    case Reg.Product{left,right,ids}:joined(ids,audit_node(left),query_node(retry,right))
 def row(value:Rows.Row<S.Workshop,P.Tree>) -> String:
   match value:
     case Rows.Row{_,I.Value{Component.Found{tree},_,_}}:P.text(tree)
@@ -87,8 +79,7 @@ def observed(rebuild:S.World(~S.Workshop) -> A.Nodes() -> A.Application(),world:
     case (world,a), (nodes,b):(rebuild(world,nodes),a ++ ";" ++ b)
 def update(+retry:Bool,app:A.Application()) -> A.Application() & String:
   match app:
-    case Root.Scheduled{App.State{General.Present{held,displaced},heldNodes,guards,handler,stateBindings},plan,bindings,rules,deferred}:observed(world => nodes => Root.Scheduled{App.State{General.Present{world,displaced},nodes,guards,handler,stateBindings},plan,bindings,rules,deferred},world(retry,scanned(held)),nodes(retry,heldNodes))
-    case app:(app,"refused inventory retained")
+    case Root.Scheduled{App.State{held,heldNodes,guards,handler,stateBindings},plan,bindings,deferred}:observed(world => nodes => Root.Scheduled{App.State{world,nodes,guards,handler,stateBindings},plan,bindings,deferred},world(retry,scanned(held)),nodes(retry,heldNodes))
 
 def snapshot(app:A.Application()) -> A.Application() & String:update(False{},app)
 def retried(result:A.Application() & String) -> A.Application():

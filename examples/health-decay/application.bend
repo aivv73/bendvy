@@ -16,8 +16,8 @@ def executed(next:Root.Application() -> I.Instance<D.Schema> -> IO(Unit),label:S
 def tick(remaining:Nat,+index:U32,app:Root.Application(),instance:I.Instance<D.Schema>) -> IO(Unit):
   match remaining:
     case 0n:IO.pure(Unit,Unit{})
-    case 1n++rest:IO.bind(Root.Application() & App.Report<String,Unit>,Unit,Root.run(app),result => executed(app => instance => tick(rest,U32.add(index,1),app,instance),"tick-" ++ U32.show(index) ++ "=",instance,result))
+    case 1n++rest:executed(app => instance => tick(rest,U32.add(index,1),app,instance),"tick-" ++ U32.show(index) ++ "=",instance,Root.run(app))
 def start(result:Maybe<Root.Application()>) -> IO(Unit):
   match result:
-    case Some{app}:IO.bind(Root.Application() & App.Report<String,Unit>,Unit,Root.run(app),result => executed(app => instance => tick(2n,1,Root.configure(True{},app),instance),"before-barrier=",I.Fresh{},result))
+    case Some{app}:executed(app => instance => tick(2n,1,Root.configure(True{},app),instance),"before-barrier=",I.Fresh{},Root.run(app))
     case None{}:IO.die(Unit,1,"health registration refused")

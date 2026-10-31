@@ -155,17 +155,17 @@ def edit_stamps(stamps:Array<L.Stamp>,+index:U32,tick:Tick.Tick,write:Bool) -> A
   match write:
     case False{}: stamps
     case True{}: edit_mark(index,tick,Array.get(L.Stamp,stamps,index))
-def edit_projected(~S:Data,~C:Type,~V:Data,values:Array<Maybe<&1,C>>,stamps:Array<L.Stamp>,+index:U32,tick:Tick.Tick,write:Bool,result:C & V) -> Column<S,C> & Maybe<&2,V>:
+def edit_projected(-S:Data,-C:Type,-V:Data,values:Array<Maybe<&1,C>>,stamps:Array<L.Stamp>,+index:U32,tick:Tick.Tick,write:Bool,result:C & V) -> Column<S,C> & Maybe<&2,V>:
   match result:
     case (owner,value): (Leaf{Array.set(Maybe<&1,C>,values,index,Some{owner}),edit_stamps(stamps,index,tick,write)},Some{value})
-def edit_taken(~S:Data,~C:Type,~V:Data,transform:C -> C & V,stamps:Array<L.Stamp>,index:U32,tick:Tick.Tick,write:Bool,result:Array<Maybe<&1,C>> & Maybe<&1,C>) -> Column<S,C> & Maybe<&2,V>:
+def edit_taken(-S:Data,-C:Type,-V:Data,transform:C -> C & V,stamps:Array<L.Stamp>,index:U32,tick:Tick.Tick,write:Bool,result:Array<Maybe<&1,C>> & Maybe<&1,C>) -> Column<S,C> & Maybe<&2,V>:
   match result:
     case (values,None{}): (Leaf{values,stamps},None{})
-    case (values,Some{owner}): edit_projected(~S,~C,~V,values,stamps,index,tick,write,transform(owner))
-def edit_leaf(~S:Data,~C:Type,~V:Data,transform:C -> C & V,values:Array<Maybe<&1,C>>,stamps:Array<L.Stamp>,+index:U32,tick:Tick.Tick,write:Bool,valid:Bool) -> Column<S,C> & Maybe<&2,V>:
+    case (values,Some{owner}): edit_projected(S,C,V,values,stamps,index,tick,write,transform(owner))
+def edit_leaf(-S:Data,-C:Type,-V:Data,transform:C -> C & V,values:Array<Maybe<&1,C>>,stamps:Array<L.Stamp>,+index:U32,tick:Tick.Tick,write:Bool,valid:Bool) -> Column<S,C> & Maybe<&2,V>:
   match valid:
     case False{}: (Leaf{values,stamps},None{})
-    case True{}: edit_taken(~S,~C,~V,transform,stamps,index,tick,write,Array.swap(Maybe<&1,C>,values,index,None{}))
+    case True{}: edit_taken(S,C,V,transform,stamps,index,tick,write,Array.swap(Maybe<&1,C>,values,index,None{}))
 def edit_return(~S:Data,~C:Type,~V:Data,path:Path<S,C>,result:Column<S,C> & Maybe<&2,V>) -> Column<S,C> & Maybe<&2,V>:
   match result:
     case (column,value): (rebuild(~S,~C,path,column),value)
@@ -178,7 +178,7 @@ def edit_route(~S:Data,~C:Type,left:Column<S,C>,right:Column<S,C>,+half:U32,+ind
 def edit_search(~S:Data,~C:Type,~V:Data,transform:C -> C & V,fuel:Nat,state:Visit<S,C>,+tick:Tick.Tick,+write:Bool) -> Column<S,C> & Maybe<&2,V>:
   match fuel state:
     case 0n Visit{column,_,path}: (rebuild(~S,~C,path,column),None{})
-    case 1n+_ Visit{Leaf{values,stamps},+index,path}: edit_return(~S,~C,~V,path,edit_leaf(~S,~C,~V,transform,values,stamps,index,tick,write,U32.is_lt(index,8)))
+    case 1n+_ Visit{Leaf{values,stamps},+index,path}: edit_return(~S,~C,~V,path,edit_leaf(S,C,V,transform,values,stamps,index,tick,write,U32.is_lt(index,8)))
     case 1n+rest Visit{Branch{+half,left,right},+index,path}: edit_search(~S,~C,~V,transform,rest,edit_route(~S,~C,left,right,half,index,path,U32.is_lt(index,half)),tick,write)
 def view(~S:Data,~C:Type,~V:Data,~project:C -> C & V,column:Column<S,C>,index:U32) -> Column<S,C> & Maybe<&2,V>:
   edit_search(~S,~C,~V,project,15n,Visit{column,index,Root{}},Tick.zero(),False{})

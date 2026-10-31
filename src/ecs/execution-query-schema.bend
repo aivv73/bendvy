@@ -1,9 +1,8 @@
 import Base
-import ./execution-resource-policy.bend as Policy
 import ./execution-composer-layout.bend as L
 import ./execution-query-domain.bend as D
 import ./execution-query-matches.bend as Q
-import ./chunk-partition.bend as Part
+import ./chunk-shape.bend as Part
 import ./chunk-column.bend as Col
 import ./owner-product.bend as Product
 import ./lifecycle.bend as Life
@@ -48,24 +47,11 @@ def all_recipes_valid(+route:L.Route,+capacity:U32,entries:List<&2,Entry>) -> Bo
     case []:True{}
     case Entry{at,recipe} <> rest:Bool.and(Bool.or(Bool.not(same_route(route,at)),Q.validate_recipe(capacity,recipe)),all_recipes_valid(route,capacity,rest))
 
-def checked_leaf(-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout,+route:L.Route,+left:List<&2,Entry>,+right:List<&2,Entry>,result:Col.Column<S,L.Viewed<P,V>> & Part.Inspection) -> L.ColumnSlot<S,L.Viewed<P,V>,key,origin> & Bool:
-  match result:
-    case (column,Part.Inspection{_,+capacity,valid}):(L.ColumnSlot{column},Bool.and(valid,Bool.and(all_recipes_valid(route,capacity,left),Bool.and(all_recipes_valid(route,capacity,right),Bool.not(D.conflicts(entry_access(route,left),entry_access(route,right)))))))
-def checked_pair(-S:Data,-left:L.Layout,-right:L.Layout,l:L.columns(~S,left) & Bool,r:L.columns(~S,right) & Bool) -> L.columns(~S,L.LayoutPair{left,right}) & Bool:
-  match l r:
-    case (l,lv), (r,rv):(Product.Owner{l,r},Bool.and(lv,rv))
 def append_route(prefix:L.Route,+suffix:L.Route) -> L.Route:
   match prefix:
     case L.AtLeaf{}:suffix
     case L.InLeft{rest}:L.InLeft{append_route(rest,suffix)}
     case L.InRight{rest}:L.InRight{append_route(rest,suffix)}
-def inspect(~S:Data,layout:L.Layout,+route:L.Route,+left:List<&2,Entry>,+right:List<&2,Entry>,columns:L.columns(~S,layout)) -> L.columns(~S,layout) & Bool:
-  match layout columns:
-    case L.EmptyLayout{} Unit{}:(Unit{},True{})
-    case L.LayoutLeaf{P,V,refresh,key,accessPolicy} L.ColumnSlot{column}:checked_leaf(S,P,V,key,L.LayoutLeaf{P,V,refresh,key,accessPolicy},route,left,right,Part.inspect(S,L.Viewed<P,V>,column))
-    case L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy} L.ColumnSlot{column}:checked_leaf(S,P,V,key,L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy},route,left,right,Part.inspect(S,L.Viewed<P,V>,column))
-    case L.LayoutPair{ll,rr} Product.Owner{l,r}:checked_pair(S,ll,rr,inspect(~S,ll,append_route(route,L.InLeft{L.AtLeaf{}}),left,right,l),inspect(~S,rr,append_route(route,L.InRight{L.AtLeaf{}}),left,right,r))
-
 def cached_cell(-P:Type,-V:Data,+offset:U32,+stamp:Life.Stamp,result:Array<Maybe<&1,L.Viewed<P,V>>> & Maybe<&1,L.Viewed<P,V>>) -> Array<Maybe<&1,L.Viewed<P,V>>> & Q.Row<V>:
   match result:
     case (values,None{}):(values,Q.StampedRow{offset,None{},stamp})
@@ -98,104 +84,6 @@ def filter_rows(-V:Data,+domain:D.Domain,rows:List<&2,Q.Row<V>>) -> List<&2,Q.Ro
   match rows:
     case []:[]
     case +row <> rest:filtered_row(V,row,filter_rows(V,domain,rest),D.contains(domain,Q.row_offset(V,row)))
-
-type Family<-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout> is Type:
-  Family{physical:Part.Cut<S,L.Viewed<P,V>>,leftCache:Q.ReadCache<S,V,origin>,rightCache:Q.ReadCache<S,V,origin>}
-def families(~S:Data,layout:L.Layout) -> Type:
-  match layout:
-    case L.EmptyLayout{}:Unit
-    case L.LayoutLeaf{P,V,refresh,key,accessPolicy}:Family<S,P,V,key,L.LayoutLeaf{P,V,refresh,key,accessPolicy}>
-    case L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy}:Family<S,P,V,key,L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy}>
-    case L.LayoutPair{left,right}:Product.Owner<families(~S,left),families(~S,right)>
-def cut_cached(-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout,left:D.Access,right:D.Access,result:Col.Column<S,L.Viewed<P,V>> & List<&2,Q.Row<V>>) -> Family<S,P,V,key,origin>:
-  match left right result:
-    case D.Access{lr,lw} D.Access{rr,rw}, (column,+rows):Family{Part.cut(S,L.Viewed<P,V>,column,lw,rw),Q.ReadCache{filter_rows(V,lr,rows)},Q.ReadCache{filter_rows(V,rr,rows)}}
-def cut_tree(~S:Data,layout:L.Layout,+route:L.Route,+left:List<&2,Entry>,+right:List<&2,Entry>,columns:L.columns(~S,layout)) -> families(~S,layout):
-  match layout columns:
-    case L.EmptyLayout{} Unit{}:Unit{}
-    case L.LayoutLeaf{P,V,refresh,key,accessPolicy} L.ColumnSlot{column}:cut_cached(S,P,V,key,L.LayoutLeaf{P,V,refresh,key,accessPolicy},entry_access(route,left),entry_access(route,right),cache_column(S,P,V,column,0))
-    case L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy} L.ColumnSlot{column}:cut_cached(S,P,V,key,L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy},entry_access(route,left),entry_access(route,right),cache_column(S,P,V,column,0))
-    case L.LayoutPair{ll,rr} Product.Owner{l,r}:Product.Owner{cut_tree(~S,ll,append_route(route,L.InLeft{L.AtLeaf{}}),left,right,l),cut_tree(~S,rr,append_route(route,L.InRight{L.AtLeaf{}}),left,right,r)}
-type Partition<-S:Data,-full:L.Layout> is Type:
-  Refused{columns:L.columns(~S,full)}
-  PartitionedInventory{families:families(~S,full)}
-def cut_checked(~S:Data,~full:L.Layout,left:List<&2,Entry>,right:List<&2,Entry>,columns:L.columns(~S,full),valid:Bool) -> Partition<S,full>:
-  match valid:
-    case False{}:Refused{columns}
-    case True{}:PartitionedInventory{cut_tree(~S,full,L.AtLeaf{},left,right,columns)}
-def cut_inspected(~S:Data,~full:L.Layout,+left:List<&2,Entry>,+right:List<&2,Entry>,result:L.columns(~S,full) & Bool) -> Partition<S,full>:
-  match result:
-    case (columns,valid):cut_checked(~S,~full,left,right,columns,Bool.and(valid,Bool.and(routes_valid(~full,left),routes_valid(~full,right))))
-def cut(~S:Data,~full:L.Layout,left:Book<S,full>,right:Book<S,full>,columns:L.columns(~S,full)) -> Partition<S,full>:
-  match left right:
-    case Book{+left} Book{+right}:cut_inspected(~S,~full,left,right,inspect(~S,full,L.AtLeaf{},left,right,columns))
-
-type Recovery<-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout> is Type:
-  Recovered{column:L.ColumnSlot<S,L.Viewed<P,V>,key,origin>,displaced:List<&1,Part.Cell<L.Viewed<P,V>>>}
-  Unrecovered{inventory:Part.Joined<S,L.Viewed<P,V>>}
-def recoveries(~S:Data,layout:L.Layout) -> Type:
-  match layout:
-    case L.EmptyLayout{}:Unit
-    case L.LayoutLeaf{P,V,refresh,key,accessPolicy}:Recovery<S,P,V,key,L.LayoutLeaf{P,V,refresh,key,accessPolicy}>
-    case L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy}:Recovery<S,P,V,key,L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy}>
-    case L.LayoutPair{left,right}:Product.Owner<recoveries(~S,left),recoveries(~S,right)>
-def displacements(~S:Data,layout:L.Layout) -> Type:
-  match layout:
-    case L.EmptyLayout{}:Unit
-    case L.LayoutLeaf{P,V,_,_,_}:List<&1,Part.Cell<L.Viewed<P,V>>>
-    case L.ClassifiedLayoutLeaf{P,V,_,_,_,_}:List<&1,Part.Cell<L.Viewed<P,V>>>
-    case L.LayoutPair{left,right}:Product.Owner<displacements(~S,left),displacements(~S,right)>
-def recovered(-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout,result:Part.Joined<S,L.Viewed<P,V>>) -> Recovery<S,P,V,key,origin>:
-  match result:
-    case Part.Joined{column,displaced}:Recovered{L.ColumnSlot{column},displaced}
-    case result:Unrecovered{result}
-def restore_family(-S:Data,-P:Type,-V:Data,-key:String,-origin:L.Layout,family:Family<S,P,V,key,origin>) -> Recovery<S,P,V,key,origin>:
-  match family:
-    case Family{Part.Refused{column,_},_,_}:Recovered{L.ColumnSlot{column},[]}
-    case Family{Part.Split{column,left,right,join},_,_}:recovered(S,P,V,key,origin,Part.join(S,L.Viewed<P,V>,join,column,left,right))
-def restore_tree(~S:Data,layout:L.Layout,tree:families(~S,layout)) -> recoveries(~S,layout):
-  match layout tree:
-    case L.EmptyLayout{} Unit{}:Unit{}
-    case L.LayoutLeaf{P,V,refresh,key,accessPolicy} family:restore_family(S,P,V,key,L.LayoutLeaf{P,V,refresh,key,accessPolicy},family)
-    case L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy} family:restore_family(S,P,V,key,L.ClassifiedLayoutLeaf{P,V,refresh,key,kind,accessPolicy},family)
-    case L.LayoutPair{ll,rr} Product.Owner{l,r}:Product.Owner{restore_tree(~S,ll,l),restore_tree(~S,rr,r)}
-type Assembly<-S:Data,-full:L.Layout> is Type:
-  Assembled{columns:L.columns(~S,full),displaced:displacements(~S,full)}
-  AssemblyRefused{inventory:recoveries(~S,full)}
-type Staged<-S:Data,-full:L.Layout> is Type:
-  Staged{columns:L.columns(~S,full),displaced:displacements(~S,full),pack:L.columns(~S,full) -> displacements(~S,full) -> recoveries(~S,full)}
-  StagingRefused{inventory:recoveries(~S,full)}
-def pack_pair(~S:Data,-ll:L.Layout,-rr:L.Layout,lp:L.columns(~S,ll) -> displacements(~S,ll) -> recoveries(~S,ll),rp:L.columns(~S,rr) -> displacements(~S,rr) -> recoveries(~S,rr),columns:L.columns(~S,L.LayoutPair{ll,rr}),displaced:displacements(~S,L.LayoutPair{ll,rr})) -> recoveries(~S,L.LayoutPair{ll,rr}):
-  match columns displaced:
-    case Product.Owner{l,r} Product.Owner{ld,rd}:Product.Owner{lp(l,ld),rp(r,rd)}
-def assembled_pair(~S:Data,-ll:L.Layout,-rr:L.Layout,left:Staged<S,ll>,right:Staged<S,rr>) -> Staged<S,L.LayoutPair{ll,rr}>:
-  match left right:
-    case Staged{l,ld,lp} Staged{r,rd,rp}:Staged{Product.Owner{l,r},Product.Owner{ld,rd},(columns => displaced => pack_pair(~S,ll,rr,lp,rp,columns,displaced))}
-    case Staged{l,ld,lp} StagingRefused{r}:StagingRefused{Product.Owner{lp(l,ld),r}}
-    case StagingRefused{l} Staged{r,rd,rp}:StagingRefused{Product.Owner{l,rp(r,rd)}}
-    case StagingRefused{l} StagingRefused{r}:StagingRefused{Product.Owner{l,r}}
-def assemble(~S:Data,layout:L.Layout,tree:recoveries(~S,layout)) -> Staged<S,layout>:
-  match layout tree:
-    case L.EmptyLayout{} Unit{}:Staged{Unit{},Unit{},(columns => displaced => Unit{})}
-    case L.LayoutLeaf{_,_,_,_,_} Recovered{column,displaced}:Staged{column,displaced,(column => displaced => Recovered{column,displaced})}
-    case L.LayoutLeaf{_,_,_,_,_} tree:StagingRefused{tree}
-    case L.ClassifiedLayoutLeaf{_,_,_,_,_,_} Recovered{column,displaced}:Staged{column,displaced,(column => displaced => Recovered{column,displaced})}
-    case L.ClassifiedLayoutLeaf{_,_,_,_,_,_} tree:StagingRefused{tree}
-    case L.LayoutPair{ll,rr} Product.Owner{l,r}:assembled_pair(~S,ll,rr,assemble(~S,ll,l),assemble(~S,rr,r))
-def finish(~S:Data,-full:L.Layout,result:Staged<S,full>) -> Assembly<S,full>:
-  match result:
-    case Staged{columns,displaced,_}:Assembled{columns,displaced}
-    case StagingRefused{tree}:AssemblyRefused{tree}
-def empty_displacements(~S:Data,layout:L.Layout) -> displacements(~S,layout):
-  match layout:
-    case L.EmptyLayout{}:Unit{}
-    case L.LayoutLeaf{_,_,_,_,_}:[]
-    case L.ClassifiedLayoutLeaf{_,_,_,_,_,_}:[]
-    case L.LayoutPair{left,right}:Product.Owner{empty_displacements(~S,left),empty_displacements(~S,right)}
-def rejoin(~S:Data,~full:L.Layout,partition:Partition<S,full>) -> Assembly<S,full>:
-  match partition:
-    case Refused{columns}:Assembled{columns,empty_displacements(~S,full)}
-    case PartitionedInventory{tree}:finish(~S,full,assemble(~S,full,restore_tree(~S,full,tree)))
 
 type Info is Data:
   Info{route:L.Route,capacity:U32,present:D.Domain}

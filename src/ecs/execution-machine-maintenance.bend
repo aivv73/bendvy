@@ -1,9 +1,8 @@
 import Base
 import ./execution-machine-state.bend as State
 import ./execution-composer-layout.bend as Layout
-import ./execution-parallel-root-application.bend as Schedule
+import ./execution-schedule.bend as Schedule
 import ./dependency-application.bend as App
-import ./dependency-registry-program.bend as Prog
 import ./dependency-executor.bend as Exec
 import ./change-tick.bend as Tick
 import ./world.bend as W
@@ -35,7 +34,7 @@ def world(~S:Data,~K:Data,~V:Data,~C:Type,~R:Type,~E:Data,~layout:Layout.Layout,
 # when its genuine World clock equals that of the preceding empty update.
 def application(~S:Data,~K:Data,~V:Data,~C:Type,~R:Type,~E:Data,~layout:Layout.Layout,~route:Layout.Route,~same:{R == Layout.resources(~S,layout) : Type},~shape:{Layout.payload(layout,route) == State.Cell<S,K,V> : Type},~Owners:Type,~Guards:Type,~Handler:Type,value:Schedule.Scheduled<App.State<W.World<S,C,R,E>,Owners,Guards,Handler>>) -> Schedule.Scheduled<App.State<W.World<S,C,R,E>,Owners,Guards,Handler>>:
   match value:
-    case Schedule.Scheduled{App.State{actual,owners,guards,handler,stateBindings},plan,bindings,rules,deferred}:Schedule.Scheduled{App.State{world(~S,~K,~V,~C,~R,~E,~layout,~route,~same,~shape,actual),owners,guards,handler,stateBindings},plan,bindings,rules,deferred}
+    case Schedule.Scheduled{App.State{actual,owners,guards,handler,stateBindings},plan,bindings,deferred}:Schedule.Scheduled{App.State{world(~S,~K,~V,~C,~R,~E,~layout,~route,~same,~shape,actual),owners,guards,handler,stateBindings},plan,bindings,deferred}
 def completed(~S:Data,~K:Data,~V:Data,~C:Type,~R:Type,~E:Data,~layout:Layout.Layout,~route:Layout.Route,~same:{R == Layout.resources(~S,layout) : Type},~shape:{Layout.payload(layout,route) == State.Cell<S,K,V> : Type},~Owners:Type,~Guards:Type,~Handler:Type,~Error:Data,~Out:Data,result:Schedule.Scheduled<App.State<W.World<S,C,R,E>,Owners,Guards,Handler>> & App.Report<Error,Out>) -> Schedule.Scheduled<App.State<W.World<S,C,R,E>,Owners,Guards,Handler>> & App.Report<Error,Out>:
   match result:
     case (value,App.Finished{events}):(application(~S,~K,~V,~C,~R,~E,~layout,~route,~same,~shape,~Owners,~Guards,~Handler,value),App.Finished{events})

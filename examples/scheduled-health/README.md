@@ -9,7 +9,7 @@ bash examples/scheduled-health/run.sh js
 bash examples/scheduled-health/run.sh native
 ```
 
-`BEND`, `NODE` and `CLANG` select the compiler and runtimes. The source was compiled and its ordinary JS entry executed with Bend 2.0.35 during this migration. Generated files stay in ignored `build/`. These entry runs produce finite observations; they are not formal proofs or a native qualification claim.
+`BEND`, `NODE` and `CLANG` select the compiler and runtimes. The sequential source passed the development source check and the existing stock 2.0.37 JavaScript/native check, with identical complete output. Generated files stay in ignored `build/`. These finite observations are not formal proofs.
 
 ```text
 before-barrier=

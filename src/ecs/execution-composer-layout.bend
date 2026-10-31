@@ -86,12 +86,14 @@ def initialize(layout:Layout,route:Route,owner:payload(layout,route)) -> stored(
     case ClassifiedLayoutLeaf{_,_,_,_,_,_} InLeft{_} owner:Viewed{owner,Unit{}}
     case ClassifiedLayoutLeaf{_,_,_,_,_,_} InRight{_} owner:Viewed{owner,Unit{}}
     case LayoutPair{_,_} AtLeaf{} owner:Viewed{owner,Unit{}}
-def rewritten(~layout:Layout,~route:Route,-Out:Type,result:payload(layout,route) & Out) -> stored(layout,route) & Out:
+def rewritten(-P:Type,-Stored:Type,-Out:Type,initialize:P -> Stored,result:P & Out) -> Stored & Out:
   match result:
-    case (owner,out):(initialize(layout,route,owner),out)
-def rewrite(~layout:Layout,~route:Route,-Out:Type,transform:payload(layout,route) -> payload(layout,route) & Out,value:stored(layout,route)) -> stored(layout,route) & Out:
+    case (owner,out):(initialize(owner),out)
+def rewrite_view(-P:Type,-V:Data,-Out:Type,initialize:P -> Viewed<P,V>,transform:P -> P & Out,value:Viewed<P,V>) -> Viewed<P,V> & Out:
   match value:
-    case Viewed{owner,_}:rewritten(~layout,~route,Out,transform(owner))
+    case Viewed{owner,_}:rewritten(P,Viewed<P,V>,Out,initialize,transform(owner))
+def rewrite(~layout:Layout,~route:Route,-Out:Type,transform:payload(layout,route) -> payload(layout,route) & Out,value:stored(layout,route)) -> stored(layout,route) & Out:
+  rewrite_view(payload(layout,route),view(layout,route),Out,initialize(layout,route),transform,value)
 def key(layout:Layout,route:Route) -> String:
   match layout route:
     case LayoutLeaf{_,V,_,key,_} AtLeaf{}:key

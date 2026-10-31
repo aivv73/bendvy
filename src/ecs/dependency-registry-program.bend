@@ -2,8 +2,7 @@ import Base
 import ./dependency-registration.bend as Reg
 import ./dependency-executor.bend as Exec
 
-# This generic pure registry carries Data dispatch. System-backed conditions use
-# execution-condition-registry and the canonical taskful IO path.
+# Registries retain actual owners and closed sequential dispatch functions.
 def Dispatch(~World:Type,~Owners:Type,~Error:Data,~Out:Data) -> Type:
   Owners -> World -> U32 -> Owners & (World & Exec.Invocation<Error,Out>)
 def Family(~Error:Data,~Out:Data) -> Type:

@@ -1,6 +1,6 @@
 # A query with retained owned state
 
-This example runs a read-only audit and a captured Changed query through the replacement Root executor. The query retains the original `Pack` containing two affine arrays. Its component stores four-cell arrays under the nominal `Workshop` schema. Registration retains each actual declaration compilation and uses its assigned system ID.
+This example runs a read-only audit and a captured Changed query through the sequential application. The query retains the original `Pack` containing two affine arrays. Its component stores four-cell arrays under the nominal `Workshop` schema. Registration retains each actual declaration compilation and uses its assigned system ID.
 
 Run the ordinary application from the repository root:
 
@@ -25,4 +25,12 @@ Read the files in this order:
 5. `observe.bend` preserves the actual nodes while showing rows, captures, arguments and cursors. Its explicit retry operation resubmits component inputs.
 6. `scenario.bend` runs the failure, retry and unchanged sequence and prints actual Root reports.
 
-`run.sh` builds and executes Bend directly. The pre-existing `verify.py`, `expected.py`, `expected.stdout` and `checks/` preserve the former rollback contract's finite evidence; the ordinary runner does not invoke them. The current application run is a finite observation, not a mathematical proof or full capability acceptance.
+`run.sh` builds and executes Bend directly. The migrated scenario passes source
+checking and complete JS/native comparisons against a finite model derived from
+these ordinary source operations. Both backends retain writes, captures, outputs
+and cursors through the deliberate error, retry and unchanged run.
+
+The pre-existing `verify.py`, `expected.py`, `expected.stdout` and `checks/`
+preserve the former rollback contract's finite evidence; the ordinary runner does
+not invoke them. The current comparison covers this complete rendered scenario,
+not a mathematical proof or full capability acceptance.

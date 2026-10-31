@@ -1,5 +1,4 @@
 import Base
-import ./execution-reservation-task.bend as Task
 import ./chunk-query.bend as Row
 import ./execution-query-lifecycle.bend as Lifecycle
 import ./execution-query-store.bend as Store
@@ -11,18 +10,16 @@ import ./execution-query-matches.bend as Match
 import ./execution-query.bend as Q
 import ./execution-builder.bend as Build
 import ./execution-state.bend as State
+import ./execution-state-effect.bend as StateEffect
+import ./execution-effects.bend as Effects
 import ./execution-composer-layout.bend as L
 import ./execution-lifecycle-notices.bend as Notice
 import ./world.bend as W
 import ./change-tick.bend as Tick
+import ./lifecycle.bend as Life
 import ./chunk-column.bend as Column
+import ./chunk-shape.bend as Part
 import ./execution-query-column.bend as EditColumn
-
-type Frame<-S:Data,-full:L.Layout,-route:L.Route,-R:Type> is Type:
-  Frame{namespace:U32,rest:Store.route_rest(~S,full,route),grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,lifecycleView:Notice.View<S>}
-def frame_scope(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,frame:Frame<S,full,route,R>,slot:Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R>:
-  match frame:
-    case Frame{namespace,rest,grants,info,resource,handles,tick,prior,+view}:State.Scope{Store.Storage{namespace,Store.put(~S,full,route,rest,slot),grants,info},resource,handles,tick,prior,view}
 def matched_view_checked(~V:Data,view:Maybe<&2,V>,matched:Bool) -> Q.GeneralLookup<V>:
   match matched:
     case False{}:Q.NotMatched{}
@@ -37,138 +34,26 @@ def selected_lookup(~V:Data,~predicate:Maybe<&2,V> -> Bool,presence:Match.Presen
   match lookup:
     case Store.Known{view}:matched_view(~V,~predicate,presence,view)
     case Store.OutsideDomain{}:outside_view(~V,~predicate,presence,U32.is_le(capacity,offset))
-def get_returned(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,frame:Frame<S,full,route,R>,offset:U32,capacity:U32,result:Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)> & Store.Lookup<L.view(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match result:
-    case (slot,lookup):(frame_scope(~S,~full,~route,~R,frame,slot),selected_lookup(~L.view(full,route),~predicate,presence,offset,capacity,lookup))
-def get_taken(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,namespace:U32,grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,+info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,+offset:U32,result:Store.route_rest(~S,full,route) & Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match result:
-    case (rest,slot):get_returned(~S,~full,~route,~R,~presence,~predicate,Frame{namespace,rest,grants,info,resource,handles,tick,prior,view},offset,Admission.capacity(Admission.info_at(route,info)),Store.read_slot(S,L.payload(full,route),L.view(full,route),L.origin(full,route),slot,offset))
-def sparse_allowed(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,offset:U32,allowed:Bool) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match scope allowed:
-    case scope False{}:(scope,Q.NotMatched{})
-    case State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,+view} True{}:get_taken(~S,~full,~route,~R,~presence,~predicate,namespace,grants,info,resource,handles,tick,prior,view,offset,Store.take(~S,full,route,columns))
-def sparse_bound_done(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,namespace:U32,grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,offset:U32,result:Store.stores(~S,full) & Bool) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match result:
-    case (columns,selected):sparse_allowed(~S,~full,~route,~R,~presence,~predicate,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},offset,selected)
-def sparse_member(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,+offset:U32,selected:Bool) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match scope selected:
-    case scope False{}:(scope,Q.NotMatched{})
-    case State.Scope{Store.Storage{namespace,columns,grants,+info},resource,handles,+tick,+prior,view} True{}:sparse_bound_done(~S,~full,~route,~R,~presence,~predicate,namespace,grants,info,resource,handles,tick,prior,view,offset,Lifecycle.sparse_bound(~S,~full,info,bound,offset,prior,tick,columns))
-def sparse_granted(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,handle:W.Handle<S>,offset:U32,grant:Maybe<&2,List<&2,W.Handle<S>>>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match grant:
-    case None{}:(scope,Q.LookupRefused{})
-    case Some{handles}:sparse_member(~S,~full,~route,~R,~bound,~presence,~predicate,scope,offset,State.member(~S,handle,handles))
-def sparse_physical(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,handle:W.Handle<S>,checked:Id.Offset<S>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match scope checked:
-    case State.Scope{Store.Storage{namespace,columns,+grants,info},resource,handles,tick,prior,+view} Id.Physical{_,offset}:sparse_granted(~S,~full,~route,~R,~bound,~presence,~predicate,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},handle,offset,Admission.grant_handles(~S,~L.columns(~S,full),Recipe.Entry{route,kind,bound,presence},grants))
-    case scope _:(scope,Q.MissingEntity{})
-def sparse_get(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,+handle:W.Handle<S>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>:
-  match scope:
-    case State.Scope{Store.Storage{+namespace,columns,grants,info},resource,+handles,tick,prior,+view}:sparse_physical(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},handle,Id.checked_offset(~S,namespace,handles,Column.maximum_capacity(),handle))
 def query_row(~S:Data,~V:Data,handle:W.Handle<S>,row:Q.GeneralLookup<V>,tail:Q.GeneralReport<S,V>) -> Q.GeneralReport<S,V>:
   match row tail:
     case Q.Matched{view} Q.SelectedRows{rows}:Q.SelectedRows{Q.GeneralRow{handle,view} <> rows}
     case Q.NotMatched{} tail:tail
     case _ _:Q.SelectionRefused{}
-def row_got(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,handle:W.Handle<S>,tail:Q.GeneralReport<S,L.view(full,route)>,result:State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>:
-  match result:
-    case (scope,row):(scope,query_row(~S,~L.view(full,route),handle,row,tail))
-def row_tail(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,+handle:W.Handle<S>,result:State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>:
-  match result:
-    case (scope,tail):row_got(~S,~full,~route,~R,handle,tail,sparse_get(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,scope,handle))
-def sparse_rows(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,candidates:List<&2,W.Handle<S>>,scope:State.Scope<S,Store.Storage<S,full>,R>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>:
-  match candidates:
-    case []:(scope,Q.SelectedRows{[]})
-    case +handle <> rest:row_tail(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,handle,sparse_rows(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,rest,scope))
-def sparse_candidates(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>,candidates:Maybe<&2,List<&2,W.Handle<S>>>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>:
-  match candidates:
-    case None{}:(scope,Q.SelectionRefused{})
-    case Some{handles}:sparse_rows(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,handles,scope)
-def sparse_query(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,Store.Storage<S,full>,R>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>:
-  match scope:
-    case State.Scope{Store.Storage{namespace,columns,+grants,info},resource,handles,tick,prior,+view}:sparse_candidates(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},Admission.grant_handles(~S,~L.columns(~S,full),Recipe.Entry{route,kind,bound,presence},grants))
-def edit_returned(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,-Out:Type,frame:Frame<S,full,route,R>,result:Store.Edit<S,L.payload(full,route),L.view(full,route),L.origin(full,route),Out>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralEdit<L.payload(full,route),Out>:
-  match result:
-    case Store.Edited{slot,out}:(frame_scope(~S,~full,~route,~R,frame,slot),Q.GeneralEdited{out})
-    case Store.Unchanged{slot,unused}:(frame_scope(~S,~full,~route,~R,frame,slot),Q.GeneralUnchanged{unused})
-def edit_taken(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,-Out:Type,namespace:U32,grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,offset:U32,transform:L.payload(full,route) -> L.payload(full,route) & Out,result:Store.route_rest(~S,full,route) & Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralEdit<L.payload(full,route),Out>:
-  match result:
-    case (rest,slot):edit_returned(~S,~full,~route,~R,Out,Frame{namespace,rest,grants,info,resource,handles,tick,prior,view},Store.edit_slot(~S,~full,~route,Out,slot,offset,tick,transform))
-def edit_physical(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,-Out:Type,scope:State.Scope<S,Store.Storage<S,full>,R>,transform:L.payload(full,route) -> L.payload(full,route) & Out,checked:Id.Offset<S>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralEdit<L.payload(full,route),Out>:
-  match scope checked:
-    case State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,+view} Id.Physical{_,offset}:edit_taken(~S,~full,~route,~R,Out,namespace,grants,info,resource,handles,tick,prior,view,offset,transform,Store.take(~S,full,route,columns))
-    case scope _:(scope,Q.GeneralUnchanged{transform})
-def edit_matched(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,-Out:Type,handle:W.Handle<S>,transform:L.payload(full,route) -> L.payload(full,route) & Out,result:State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralLookup<L.view(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralEdit<L.payload(full,route),Out>:
-  match result:
-    case (State.Scope{Store.Storage{+namespace,columns,grants,info},resource,+handles,tick,prior,+view},Q.Matched{_}):edit_physical(~S,~full,~route,~R,Out,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},transform,Id.checked_offset(~S,namespace,handles,Column.maximum_capacity(),handle))
-    case (scope,_):(scope,Q.GeneralUnchanged{transform})
-def sparse_modify(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,-Out:Type,scope:State.Scope<S,Store.Storage<S,full>,R>,+handle:W.Handle<S>,transform:L.payload(full,route) -> L.payload(full,route) & Out) -> State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralEdit<L.payload(full,route),Out>:
-  edit_matched(~S,~full,~route,~R,Out,handle,transform,sparse_get(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate,scope,handle))
-def sparse_reader(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool) -> Q.GeneralReader<S,State.Scope<S,Store.Storage<S,full>,R>,L.view(full,route)>:
-  Q.GeneralReader{scope=>sparse_query(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,scope),scope=>handle=>sparse_get(~S,~full,~route,~R,~kind,~bound,~presence,~predicate,scope,handle)}
-def traverse_selected_handles(~S:Data,~V:Data,rows:List<&2,Q.GeneralRow<S,V>>) -> List<&2,W.Handle<S>>:
-  match rows:
-    case []:[]
-    case Q.GeneralRow{handle,Some{_}} <> rest:handle <> traverse_selected_handles(~S,~V,rest)
-    case Q.GeneralRow{_,None{}} <> rest:traverse_selected_handles(~S,~V,rest)
-def traverse_selected_offsets(~S:Data,handles:List<&2,W.Handle<S>>) -> List<&2,U32>:
-  match handles:
-    case []:[]
-    case handle <> rest:U32.sub(W.handle_index(~S,handle),1) <> traverse_selected_offsets(~S,rest)
-def traverse_members(~S:Data,requested:List<&2,W.Handle<S>>,+selected:List<&2,W.Handle<S>>) -> Bool:
-  match requested:
-    case []:True{}
-    case handle <> rest:Bool.and(State.member(~S,handle,selected),traverse_members(~S,rest,selected))
-def traverse_chosen(~S:Data,selected:List<&2,W.Handle<S>>,targets:Q.GeneralTargets<S>) -> List<&2,W.Handle<S>>:
-  match targets:
-    case Q.AllMatched{}:selected
-    case Q.ExplicitHandles{requested}:requested
-def traverse_sparse_returned(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,frame:Frame<S,full,route,R>,result:Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)> & (O & (List<&2,Row.Error<E>> & Bool))) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match result:
-    case (slot,(output,(errors,True{}))):(frame_scope(~S,~full,~route,~R,frame,slot),(output,Q.Completed{errors}))
-    case (slot,(output,(_,False{}))):(frame_scope(~S,~full,~route,~R,frame,slot),(output,Q.LayoutRefused{}))
-def traverse_sparse_taken(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),frame:Frame<S,full,route,R>,+selected:List<&2,W.Handle<S>>,tick:Tick.Tick,parallel:Bool,output:O,slot:Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  traverse_sparse_returned(~S,~full,~route,~R,~O,~E,frame,Store.traverse_output_slot(~S,~full,~route,~O,~E,~body,~split,~merge,selected,tick,parallel,Row.Selected{traverse_selected_offsets(~S,selected)},slot,output))
-def traverse_sparse_split(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),namespace:U32,grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,selected:List<&2,W.Handle<S>>,parallel:Bool,output:O,result:Store.route_rest(~S,full,route) & Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match result:
-    case (rest,slot):traverse_sparse_taken(~S,~full,~route,~R,~O,~E,~split,~merge,~body,Frame{namespace,rest,grants,info,resource,handles,tick,prior,view},selected,tick,parallel,output,slot)
-def traverse_sparse_admitted(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),scope:State.Scope<S,Store.Storage<S,full>,R>,output:O,parallel:Bool,checked:Id.TargetCheck<S>,members:Bool) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match scope checked members:
-    case State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,+view} Id.Targets{[],_} True{}:(State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},(output,Q.Completed{[]}))
-    case State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,+view} Id.Targets{selected,_} True{}:traverse_sparse_split(~S,~full,~route,~R,~O,~E,~split,~merge,~body,namespace,grants,info,resource,handles,tick,prior,view,selected,parallel,output,Store.take(~S,full,route,columns))
-    case scope _ _:(scope,(output,Q.LayoutRefused{}))
-def traverse_sparse_validate(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),scope:State.Scope<S,Store.Storage<S,full>,R>,output:O,parallel:Bool,selected:List<&2,W.Handle<S>>,+requested:List<&2,W.Handle<S>>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match scope:
-    case State.Scope{Store.Storage{+namespace,columns,grants,info},resource,+handles,tick,prior,+view}:traverse_sparse_admitted(~S,~full,~route,~R,~O,~E,~split,~merge,~body,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},output,parallel,Id.targets_offsets(~S,requested,Id.target_offsets(~S,namespace,handles,requested)),traverse_members(~S,requested,selected))
-def traverse_sparse_choose(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),scope:State.Scope<S,Store.Storage<S,full>,R>,output:O,parallel:Bool,+selected:List<&2,W.Handle<S>>,targets:Q.GeneralTargets<S>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  traverse_sparse_validate(~S,~full,~route,~R,~O,~E,~split,~merge,~body,scope,output,parallel,selected,traverse_chosen(~S,selected,targets))
-def traverse_sparse_queried(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),output:O,parallel:Bool,targets:Q.GeneralTargets<S>,result:State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match result:
-    case (scope,Q.SelectionRefused{}):(scope,(output,Q.LayoutRefused{}))
-    case (scope,Q.SelectedRows{rows}):traverse_sparse_choose(~S,~full,~route,~R,~O,~E,~split,~merge,~body,scope,output,parallel,traverse_selected_handles(~S,~L.view(full,route),rows),targets)
-def traverse_sparse(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),mode:Q.Mode,scope:State.Scope<S,Store.Storage<S,full>,R>,output:O,targets:Q.GeneralTargets<S>) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
-  match mode:
-    case Q.Serial{}:traverse_sparse_queried(~S,~full,~route,~R,~O,~E,~split,~merge,~body,output,False{},targets,sparse_query(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate,scope))
-    case Q.Parallel{}:traverse_sparse_queried(~S,~full,~route,~R,~O,~E,~split,~merge,~body,output,True{},targets,sparse_query(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate,scope))
-    case _:(scope,(output,Q.LayoutRefused{}))
-def sparse_caps_direct(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,kind:Recipe.QueryKind) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,Store.Storage<S,full>,R>):
-  match kind:
-    case Recipe.ReadRows{}:sparse_reader(~S,~full,~route,~R,~Recipe.ReadRows{},~bound,~presence,~predicate)
-    case Recipe.WriteRows{}:Q.GeneralWriter{sparse_reader(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate),Out=>scope=>handle=>transform=>sparse_modify(~S,~full,~route,~R,~bound,~presence,~predicate,Out,scope,handle,transform)}
-def sparse_caps(~S:Data,~full:L.Layout,~route:L.Route,~C:Type,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,same:{C == Store.Storage<S,full> : Type},kind:Recipe.QueryKind) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,C,R>):
-  %Equal.sym(Type,C,Store.Storage<S,full>,same) : Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,_,R>)
-  sparse_caps_direct(~S,~full,~route,~R,~bound,~presence,~predicate,kind)
 type WholeFrame<-S:Data,-full:L.Layout,-route:L.Route,-R:Type> is Type:
   WholeFrame{rest:L.column_rest(~S,full,route),resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,lifecycleView:Notice.View<S>}
 def whole_scope(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,frame:WholeFrame<S,full,route,R>,column:Column.Column<S,L.stored(full,route)>) -> State.Scope<S,L.columns(~S,full),R>:
   match frame:
     case WholeFrame{rest,resource,handles,tick,prior,+view}:State.Scope{L.column_put(~S,full,route,rest,L.ColumnSlot{column}),resource,handles,tick,prior,view}
-def whole_cached(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,frame:WholeFrame<S,full,route,R>,+offset:U32,capacity:U32,result:Column.Column<S,L.stored(full,route)> & List<&2,Match.Row<L.view(full,route)>>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
+def whole_lookup(~V:Data,view:Maybe<&2,V>,inside:Bool) -> Store.Lookup<V>:
+  match inside:
+    case True{}:Store.Known{view}
+    case False{}:Store.OutsideDomain{}
+def whole_cached(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,frame:WholeFrame<S,full,route,R>,+offset:U32,+capacity:U32,result:Column.Column<S,L.stored(full,route)> & Maybe<&2,L.view(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
   match result:
-    case (column,rows):(whole_scope(~S,~full,~route,~R,frame,column),selected_lookup(~L.view(full,route),~predicate,presence,offset,capacity,Store.cached_lookup(L.view(full,route),rows,offset)))
-def whole_taken(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,offset:U32,capacity:U32,result:L.column_rest(~S,full,route) & L.ColumnSlot<S,L.stored(full,route),L.key(full,route),L.origin(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
+    case (column,view):(whole_scope(~S,~full,~route,~R,frame,column),selected_lookup(~L.view(full,route),~predicate,presence,offset,capacity,whole_lookup(~L.view(full,route),view,U32.is_lt(offset,capacity))))
+def whole_taken(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,resource:R,handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,+offset:U32,capacity:U32,result:L.column_rest(~S,full,route) & L.ColumnSlot<S,L.stored(full,route),L.key(full,route),L.origin(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
   match result:
-    case (rest,L.ColumnSlot{column}):whole_cached(~S,~full,~route,~R,~presence,~predicate,WholeFrame{rest,resource,handles,tick,prior,view},offset,capacity,Schema.cache_column(S,L.payload(full,route),L.view(full,route),column,0))
+    case (rest,L.ColumnSlot{column}):whole_cached(~S,~full,~route,~R,~presence,~predicate,WholeFrame{rest,resource,handles,tick,prior,view},offset,capacity,Column.view(~S,~L.stored(full,route),~L.view(full,route),~L.read(~L.payload(full,route),~L.view(full,route)),column,offset))
 def whole_described_allowed(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,L.columns(~S,full),R>,offset:U32,capacity:U32,allowed:Bool) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
   match scope allowed:
     case scope False{}:(scope,Q.NotMatched{})
@@ -208,16 +93,27 @@ def whole_modify(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bou
 def whole_row_got(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,handle:W.Handle<S>,tail:Q.GeneralReport<S,L.view(full,route)>,result:State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
   match result:
     case (scope,row):(scope,query_row(~S,~L.view(full,route),handle,row,tail))
-def whole_row_tail(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,+handle:W.Handle<S>,result:State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
+def whole_known_physical(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,+info:List<&2,Schema.Info>,scope:State.Scope<S,L.columns(~S,full),R>,checked:Id.Offset<S>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
+  match scope checked:
+    case State.Scope{columns,resource,handles,+tick,+prior,view} Id.Physical{_,+offset}:whole_bound_done(~S,~full,~route,~R,~presence,~predicate,resource,handles,tick,prior,view,offset,Admission.capacity(Admission.info_at(route,info)),Lifecycle.whole_bound(~S,~full,info,bound,offset,prior,tick,columns))
+    case scope _:(scope,Q.MissingEntity{})
+def whole_known_get(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,info:List<&2,Schema.Info>,scope:State.Scope<S,L.columns(~S,full),R>,handle:W.Handle<S>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralLookup<L.view(full,route)>:
+  match scope:
+    case State.Scope{columns,resource,+handles,tick,prior,view}:whole_known_physical(~S,~full,~route,~R,~bound,~presence,~predicate,info,State.Scope{columns,resource,handles,tick,prior,view},Id.captured_offset(~S,handles,handle))
+def whole_row_tail(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,info:List<&2,Schema.Info>,+handle:W.Handle<S>,result:State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
   match result:
-    case (scope,tail):whole_row_got(~S,~full,~route,~R,handle,tail,whole_get(~S,~full,~route,~R,~bound,~presence,~predicate,scope,handle))
-def whole_rows(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,candidates:List<&2,W.Handle<S>>,scope:State.Scope<S,L.columns(~S,full),R>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
+    case (scope,tail):whole_row_got(~S,~full,~route,~R,handle,tail,whole_known_get(~S,~full,~route,~R,~bound,~presence,~predicate,info,scope,handle))
+def whole_rows(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,+info:List<&2,Schema.Info>,candidates:List<&2,W.Handle<S>>,scope:State.Scope<S,L.columns(~S,full),R>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
   match candidates:
     case []:(scope,Q.SelectedRows{[]})
-    case +handle <> rest:whole_row_tail(~S,~full,~route,~R,~bound,~presence,~predicate,handle,whole_rows(~S,~full,~route,~R,~bound,~presence,~predicate,rest,scope))
+    case +handle <> rest:whole_row_tail(~S,~full,~route,~R,~bound,~presence,~predicate,info,handle,whole_rows(~S,~full,~route,~R,~bound,~presence,~predicate,info,rest,scope))
+def whole_query_described(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,resource:R,+handles:List<&2,W.Handle<S>>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,description:Schema.Description<S,full>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
+  match description:
+    case Schema.Description{columns,info,True{}}:whole_rows(~S,~full,~route,~R,~bound,~presence,~predicate,info,handles,State.Scope{columns,resource,handles,tick,prior,view})
+    case Schema.Description{columns,_,False{}}:(State.Scope{columns,resource,handles,tick,prior,view},Q.SelectionRefused{})
 def whole_query(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,scope:State.Scope<S,L.columns(~S,full),R>) -> State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>:
   match scope:
-    case State.Scope{columns,resource,+handles,tick,prior,+view}:whole_rows(~S,~full,~route,~R,~bound,~presence,~predicate,handles,State.Scope{columns,resource,handles,tick,prior,view})
+    case State.Scope{columns,resource,handles,tick,prior,view}:whole_query_described(~S,~full,~route,~R,~bound,~presence,~predicate,resource,handles,tick,prior,view,Schema.describe(~S,full,L.AtLeaf{},columns))
 
 def whole_reader(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool) -> Q.GeneralReader<S,State.Scope<S,L.columns(~S,full),R>,L.view(full,route)>:
   Q.GeneralReader{scope=>whole_query(~S,~full,~route,~R,~bound,~presence,~predicate,scope),scope=>handle=>whole_get(~S,~full,~route,~R,~bound,~presence,~predicate,scope,handle)}
@@ -228,75 +124,97 @@ def whole_caps_direct(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recip
 def whole_caps(~S:Data,~full:L.Layout,~route:L.Route,~C:Type,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,same:{C == L.columns(~S,full) : Type},kind:Recipe.QueryKind) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,C,R>):
   %Equal.sym(Type,C,L.columns(~S,full),same) : Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,_,R>)
   whole_caps_direct(~S,~full,~route,~R,~bound,~presence,~predicate,kind)
-def model_caps(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,model:Store.StorageModel,local:{C == Store.owner(~S,full,model) : Type},kind:Recipe.QueryKind) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,C,R>):
-  match model:
-    case Store.Whole{}:whole_caps(~S,~full,~route,~C,~R,~bound,~presence,~predicate,local,kind)
-    case Store.Sparse{}:sparse_caps(~S,~full,~route,~C,~R,~bound,~presence,~predicate,local,kind)
-def ordinary_provider(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~model:Store.StorageModel,~local:{C == Store.owner(~S,full,model) : Type},~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,C,R>):
-  model_caps(~S,~WC,~C,~R,~full,~route,~same,~valid,~bound,~presence,~predicate,model,local,kind)
 
-def sparse_output_caps_direct(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>)) -> Q.GeneralOutputWriter<S,State.Scope<S,Store.Storage<S,full>,R>,L.payload(full,route),L.view(full,route),O,E>:
-  Q.GeneralOutputWriter{sparse_reader(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate),Out=>scope=>handle=>transform=>sparse_modify(~S,~full,~route,~R,~bound,~presence,~predicate,Out,scope,handle,transform),traverse_sparse(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body)}
-def sparse_output_caps(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),~C:Type,same:{C == Store.Storage<S,full> : Type}) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
-  %Equal.sym(Type,C,Store.Storage<S,full>,same) : Q.GeneralOutputWriter<S,State.Scope<S,_,R>,L.payload(full,route),L.view(full,route),O,E>
-  sparse_output_caps_direct(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body)
-def whole_output_caps_direct(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>)) -> Q.GeneralOutputWriter<S,State.Scope<S,L.columns(~S,full),R>,L.payload(full,route),L.view(full,route),O,E>:
-  Q.GeneralOutputWriter{whole_reader(~S,~full,~route,~R,~bound,~presence,~predicate),Out=>scope=>handle=>transform=>whole_modify(~S,~full,~route,~R,~bound,~presence,~predicate,Out,scope,handle,transform),mode=>scope=>output=>targets=>(scope,(output,Q.LayoutRefused{}))}
-def whole_output_caps(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),~C:Type,same:{C == L.columns(~S,full) : Type}) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
-  %Equal.sym(Type,C,L.columns(~S,full),same) : Q.GeneralOutputWriter<S,State.Scope<S,_,R>,L.payload(full,route),L.view(full,route),O,E>
-  whole_output_caps_direct(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body)
-def output_model_caps(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),model:Store.StorageModel,local:{C == Store.owner(~S,full,model) : Type}) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
-  match model:
-    case Store.Whole{}:whole_output_caps(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,~C,local)
-    case Store.Sparse{}:sparse_output_caps(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,~C,local)
-def output_provider(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~model:Store.StorageModel,~local:{C == Store.owner(~S,full,model) : Type},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>)) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
-  output_model_caps(~S,~WC,~C,~R,~full,~route,~same,~valid,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,model,local)
-
-def task_selected_handles(~S:Data,~V:Data,rows:List<&2,Q.GeneralRow<S,V>>) -> List<&2,W.Handle<S>>:
+def selected_handles(~S:Data,~V:Data,rows:List<&2,Q.GeneralRow<S,V>>) -> List<&2,W.Handle<S>>:
   match rows:
     case []:[]
-    case Q.GeneralRow{handle,Some{_}} <> rest:handle <> task_selected_handles(~S,~V,rest)
-    case Q.GeneralRow{_,None{}} <> rest:task_selected_handles(~S,~V,rest)
-
-def task_selected_offsets(~S:Data,handles:List<&2,W.Handle<S>>) -> List<&2,U32>:
-  match handles:
-    case []:[]
-    case handle <> rest:U32.sub(W.handle_index(~S,handle),1) <> task_selected_offsets(~S,rest)
-
-def task_sparse_returned(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,frame:Frame<S,full,route,R>,result:Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)> & (O & (List<&2,Row.Error<E>> & Bool))) -> State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>):
+    case Q.GeneralRow{handle,Some{_}} <> rest:handle <> selected_handles(~S,~V,rest)
+    case Q.GeneralRow{_,None{}} <> rest:selected_handles(~S,~V,rest)
+def requested_member(~S:Data,handle:W.Handle<S>,targets:Q.GeneralTargets<S>) -> Bool:
+  match targets:
+    case Q.AllMatched{}:True{}
+    case Q.ExplicitHandles{requested}:State.member(~S,handle,requested)
+def members(~S:Data,requested:List<&2,W.Handle<S>>,+selected:List<&2,W.Handle<S>>) -> Bool:
+  match requested:
+    case []:True{}
+    case handle <> rest:Bool.and(State.member(~S,handle,selected),members(~S,rest,selected))
+def row_errors(~E:Data,index:U32,errors:List<&2,Row.Error<E>>,error:Maybe<&2,E>) -> List<&2,Row.Error<E>>:
+  match error:
+    case None{}:errors
+    case Some{value}:Row.Error{index,value} <> errors
+def row_operation(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~P:Type,~V:Data,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~P,~V,~O,~E),handle:W.Handle<S>,view:V,payload:P,state:O & Maybe<&2,E>) -> F(P & (O & Maybe<&2,E>)):
+  match state:
+    case (output,_):body(handle,view,payload,output)
+def row_updated(~S:Data,~F:Type -> Type,~C:Type,~O:Type,~E:Data,index:U32,errors:List<&2,Row.Error<E>>,next:Column.Column<S,C> -> O -> List<&2,Row.Error<E>> -> F(Column.Column<S,C> & (O & List<&2,Row.Error<E>>)),result:EditColumn.Update<S,C,O & Maybe<&2,E>>) -> F(Column.Column<S,C> & (O & List<&2,Row.Error<E>>)):
   match result:
-    case (slot,(output,(errors,True{}))):(frame_scope(~S,~full,~route,~R,frame,slot),(output,Q.Completed{errors}))
-    case (slot,(output,(_,False{}))):(frame_scope(~S,~full,~route,~R,frame,slot),(output,Q.LayoutRefused{}))
-
-def task_sparse_taken(~S:Data,~Permit:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),namespace:U32,grants:List<&2,Admission.Granted<S,L.columns(~S,full)>>,info:List<&2,Schema.Info>,resource:R,handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,+selected:List<&2,W.Handle<S>>,+mode:Q.Mode,output:O,result:Store.route_rest(~S,full,route) & Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)>) -> Task.Task<S,Permit,State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>)>:
+    case EditColumn.Updated{column,(output,error),_}:next(column,output,row_errors(~E,index,errors,error))
+def row_allowed(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),shape:Part.Shape,column:Column.Column<S,L.stored(full,route)>,+index:U32,tick:Tick.Tick,handle:W.Handle<S>,view:L.view(full,route),output:O,errors:List<&2,Row.Error<E>>,next:Column.Column<S,L.stored(full,route)> -> O -> List<&2,Row.Error<E>> -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)),allowed:Bool) -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)):
+  match allowed:
+    case False{}:next(column,output,errors)
+    case True{}:Effects.bind(~F,EditColumn.Update<S,L.stored(full,route),O & Maybe<&2,E>>,Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>),effects,EditColumn.effect_tree(~S,~F,~effects,~full,~route,O & Maybe<&2,E>,shape,column,index,tick,(output,None{}),payload=>state=>row_operation(~S,~Permit,~F,~effects,~L.payload(full,route),~L.view(full,route),~O,~E,~body,handle,view,payload,state)),result=>row_updated(~S,~F,~L.stored(full,route),~O,~E,index,errors,next,result))
+def filter_stamp(mode:Q.Mode,prior:Maybe<&2,Tick.Tick>,tick:Tick.Tick,stamp:Maybe<&2,Life.Stamp>) -> Bool:
+  match mode stamp:
+    case Q.AllRows{} _:True{}
+    case Q.Where{filter} Some{stamp}:Life.matches(filter,stamp,prior,tick)
+    case _ _:False{}
+def row_stamped(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),shape:Part.Shape,index:U32,+tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,mode:Q.Mode,handle:W.Handle<S>,view:L.view(full,route),output:O,errors:List<&2,Row.Error<E>>,next:Column.Column<S,L.stored(full,route)> -> O -> List<&2,Row.Error<E>> -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)),result:Column.Column<S,L.stored(full,route)> & Maybe<&2,Life.Stamp>) -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)):
   match result:
-    case (rest,slot):Task.TBind{Store.Slot<S,L.payload(full,route),L.view(full,route),L.origin(full,route)> & (O & (List<&2,Row.Error<E>> & Bool)),Store.task_output_slot(~S,~Permit,~full,~route,~O,~E,~body,~split,~merge,selected,tick,Q.mode_parallel(mode),Q.selection(mode,task_selected_offsets(~S,selected),prior),slot,output),result=>Task.TDone{task_sparse_returned(~S,~full,~route,~R,~O,~E,Frame{namespace,rest,grants,info,resource,handles,tick,prior,view},result)}}
-
-def task_sparse_selected(~S:Data,~Permit:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,output:O,result:State.Scope<S,Store.Storage<S,full>,R> & Q.GeneralReport<S,L.view(full,route)>) -> Task.Task<S,Permit,State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>)>:
+    case (column,stamp):row_allowed(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,column,index,tick,handle,view,output,errors,next,filter_stamp(mode,prior,tick,stamp))
+def row_selected(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),shape:Part.Shape,column:Column.Column<S,L.stored(full,route)>,+index:U32,+tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,mode:Q.Mode,handle:W.Handle<S>,view:L.view(full,route),output:O,errors:List<&2,Row.Error<E>>,next:Column.Column<S,L.stored(full,route)> -> O -> List<&2,Row.Error<E>> -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)),selected:Bool) -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)):
+  match mode selected:
+    case _ False{}:next(column,output,errors)
+    case Q.AllRows{} True{}:row_allowed(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,column,index,tick,handle,view,output,errors,next,True{})
+    case mode True{}:row_stamped(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,index,tick,prior,mode,handle,view,output,errors,next,Column.lifecycle(~S,~L.stored(full,route),column,index))
+def traverse_rows(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),+shape:Part.Shape,+capacity:U32,rows:List<&2,Q.GeneralRow<S,L.view(full,route)>>,column:Column.Column<S,L.stored(full,route)>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,+mode:Q.Mode,+requested:Q.GeneralTargets<S>,output:O,errors:List<&2,Row.Error<E>>) -> F(Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)):
+  match rows:
+    case []:Effects.pure(~F,Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>),effects,(column,(output,List.reverse(&2,Row.Error<E>,errors))))
+    case Q.GeneralRow{_,None{}} <> rest:traverse_rows(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,capacity,rest,column,tick,prior,mode,requested,output,errors)
+    case Q.GeneralRow{+handle,Some{view}} <> rest:row_selected(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,column,U32.sub(W.handle_index(~S,handle),1),tick,prior,mode,handle,view,output,errors,(column=>output=>errors=>traverse_rows(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,capacity,rest,column,tick,prior,mode,requested,output,errors)),Bool.and(requested_member(~S,handle,requested),U32.is_le(W.handle_index(~S,handle),capacity)))
+def traversal_returned(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,frame:WholeFrame<S,full,route,R>,result:Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>)) -> State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>):
   match result:
-    case (scope,Q.SelectionRefused{}):Task.TDone{(scope,(output,Q.LayoutRefused{}))}
-    case (State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,+view},Q.SelectedRows{rows}):task_sparse_taken(~S,~Permit,~full,~route,~R,~O,~E,~split,~merge,~body,namespace,grants,info,resource,handles,tick,prior,view,task_selected_handles(~S,~L.view(full,route),rows),mode,output,Store.take(~S,full,route,columns))
-
-def task_sparse_targets(~S:Data,~Permit:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,scope:State.Scope<S,Store.Storage<S,full>,R>,output:O,checked:Id.TargetCheck<S>) -> Task.Task<S,Permit,State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>)>:
-  match checked:
-    case Id.Refused{_}:Task.TDone{(scope,(output,Q.LayoutRefused{}))}
-    case Id.Targets{_,_}:task_sparse_selected(~S,~Permit,~full,~route,~R,~O,~E,~split,~merge,~body,mode,output,sparse_query(~S,~full,~route,~R,~Recipe.WriteRows{},~bound,~presence,~predicate,scope))
-
-def task_sparse_invoke(~S:Data,~Permit:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,scope:State.Scope<S,Store.Storage<S,full>,R>,output:O) -> Task.Task<S,Permit,State.Scope<S,Store.Storage<S,full>,R> & (O & Q.Report<E>)>:
+    case (column,(output,errors)):(whole_scope(~S,~full,~route,~R,frame,column),(output,Q.Completed{errors}))
+def traversal_inspected(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),frame:WholeFrame<S,full,route,R>,tick:Tick.Tick,prior:Maybe<&2,Tick.Tick>,mode:Q.Mode,requested:Q.GeneralTargets<S>,rows:List<&2,Q.GeneralRow<S,L.view(full,route)>>,output:O,result:Column.Column<S,L.stored(full,route)> & Part.Inspection) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match result:
+    case (column,Part.Inspection{_,_,False{}}):Effects.pure(~F,State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>),effects,(whole_scope(~S,~full,~route,~R,frame,column),(output,Q.LayoutRefused{})))
+    case (column,Part.Inspection{shape,capacity,True{}}):Effects.map(~F,Column.Column<S,L.stored(full,route)> & (O & List<&2,Row.Error<E>>),State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>),effects,traverse_rows(~S,~Permit,~F,~effects,~full,~route,~O,~E,~body,shape,capacity,rows,column,tick,prior,mode,requested,output,[]),result=>traversal_returned(~S,~full,~route,~R,~O,~E,frame,result))
+def traversal_taken(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),resource:R,handles:List<&2,W.Handle<S>>,+tick:Tick.Tick,+prior:Maybe<&2,Tick.Tick>,view:Notice.View<S>,mode:Q.Mode,requested:Q.GeneralTargets<S>,rows:List<&2,Q.GeneralRow<S,L.view(full,route)>>,output:O,result:L.column_rest(~S,full,route) & L.ColumnSlot<S,L.stored(full,route),L.key(full,route),L.origin(full,route)>) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match result:
+    case (rest,L.ColumnSlot{column}):traversal_inspected(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,WholeFrame{rest,resource,handles,tick,prior,view},tick,prior,mode,requested,rows,output,Part.inspect(S,L.stored(full,route),column))
+def traversal_validated(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),scope:State.Scope<S,L.columns(~S,full),R>,mode:Q.Mode,rows:List<&2,Q.GeneralRow<S,L.view(full,route)>>,output:O,checked:Id.TargetCheck<S>,allowed:Bool) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match scope checked allowed:
+    case State.Scope{columns,resource,handles,tick,prior,view} Id.Targets{requested,_} True{}:traversal_taken(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,resource,handles,tick,prior,view,mode,Q.ExplicitHandles{requested},rows,output,L.column_take(~S,full,route,columns))
+    case scope _ _:Effects.pure(~F,State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>),effects,(scope,(output,Q.LayoutRefused{})))
+def traversal_requested(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),scope:State.Scope<S,L.columns(~S,full),R>,mode:Q.Mode,rows:List<&2,Q.GeneralRow<S,L.view(full,route)>>,output:O,+selected:List<&2,W.Handle<S>>,+requested:List<&2,W.Handle<S>>) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
   match scope:
-    case State.Scope{Store.Storage{+namespace,columns,grants,info},resource,+handles,tick,prior,+view}:task_sparse_targets(~S,~Permit,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,mode,State.Scope{Store.Storage{namespace,columns,grants,info},resource,handles,tick,prior,view},output,Id.targets(~S,namespace,handles))
+    case State.Scope{columns,resource,+handles,tick,prior,+view}:traversal_validated(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,State.Scope{columns,resource,handles,tick,prior,view},mode,rows,output,Id.targets_offsets(~S,requested,Id.target_offsets(~S,Q.view_namespace(~S,view),handles,requested)),members(~S,requested,selected))
+def traversal_queried(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,output:O,targets:Q.GeneralTargets<S>,result:State.Scope<S,L.columns(~S,full),R> & Q.GeneralReport<S,L.view(full,route)>) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match targets result:
+    case _, (scope,Q.SelectionRefused{}):Effects.pure(~F,State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>),effects,(scope,(output,Q.LayoutRefused{})))
+    case Q.AllMatched{}, (State.Scope{columns,resource,handles,tick,prior,view},Q.SelectedRows{rows}):traversal_taken(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,resource,handles,tick,prior,view,mode,Q.AllMatched{},rows,output,L.column_take(~S,full,route,columns))
+    case Q.ExplicitHandles{requested}, (scope,Q.SelectedRows{+rows}):traversal_requested(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,scope,mode,rows,output,selected_handles(~S,~L.view(full,route),rows),requested)
+def traversal_live(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,scope:State.Scope<S,L.columns(~S,full),R>,output:O,targets:Q.GeneralTargets<S>,checked:Id.TargetCheck<S>) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match checked:
+    case Id.Refused{_}:Effects.pure(~F,State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>),effects,(scope,(output,Q.LayoutRefused{})))
+    case Id.Targets{_,_}:traversal_queried(~S,~Permit,~F,~effects,~full,~route,~R,~O,~E,~body,mode,output,targets,whole_query(~S,~full,~route,~R,~bound,~presence,~predicate,scope))
+def whole_traverse(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,scope:State.Scope<S,L.columns(~S,full),R>,output:O,targets:Q.GeneralTargets<S>) -> F(State.Scope<S,L.columns(~S,full),R> & (O & Q.Report<E>)):
+  match scope:
+    case State.Scope{columns,resource,+handles,tick,prior,+view}:traversal_live(~S,~Permit,~F,~effects,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~body,mode,State.Scope{columns,resource,handles,tick,prior,view},output,targets,Id.targets(~S,Q.view_namespace(~S,view),handles))
 
-def task_sparse_caps(~S:Data,~Permit:Data,~full:L.Layout,~route:L.Route,~C:Type,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,same:{C == Store.Storage<S,full> : Type}) -> Q.TaskOutputEach<S,Permit,State.Scope<S,C,R>,O,E>:
-  %Equal.sym(Type,C,Store.Storage<S,full>,same) : Q.TaskOutputEach<S,Permit,State.Scope<S,_,R>,O,E>
-  Q.TaskOutputEach{task_sparse_invoke(~S,~Permit,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,mode)}
-
-def task_model_caps(~S:Data,~Permit:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,model:Store.StorageModel,local:{C == Store.owner(~S,full,model) : Type}) -> Q.TaskOutputEach<S,Permit,State.Scope<S,C,R>,O,E>:
-  match model:
-    case Store.Whole{}:Q.TaskOutputEach{scope=>output=>Task.TDone{(scope,(output,Q.LayoutRefused{}))}}
-    case Store.Sparse{}:task_sparse_caps(~S,~Permit,~full,~route,~C,~R,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,mode,local)
-
-def task_provider_dictionary(~S:Data,~WC:Type,~C:Type,~R:Type,~Permit:Data,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~model:Store.StorageModel,~local:{C == Store.owner(~S,full,model) : Type},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~split:O -> O & O,~merge:O -> O -> O,~body:Q.TaskGeneralBody(~S,~Permit,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode) -> Q.TaskOutputEach<S,Permit,State.Scope<S,C,R>,O,E>:
-  task_model_caps(~S,~Permit,~WC,~C,~R,~full,~route,~same,~valid,~bound,~presence,~predicate,~O,~E,~split,~merge,~body,mode,model,local)
-
-def provider_dictionary(~S:Data,~WC:Type,~C:Type,~R:Type,~Ops:Type,~selection:Build.GeneralProviderSelection(~S,~WC,~C,~R,~Ops)) -> Ops:
-  selection(ordinary_provider(~S,~WC,~C,~R),output_provider(~S,~WC,~C,~R),task_provider_dictionary(~S,~WC,~C,~R))
+def ordinary_provider(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~local:{C == L.columns(~S,full) : Type},~kind:Recipe.QueryKind,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool) -> Q.GeneralOps(~S,~L.payload(full,route),~L.view(full,route),kind,State.Scope<S,C,R>):
+  whole_caps(~S,~full,~route,~C,~R,~bound,~presence,~predicate,local,kind)
+def pure_body(~S:Data,~P:Type,~V:Data,~O:Type,~E:Data,~body:W.Handle<S> -> V -> P -> O -> P & (O & Maybe<&2,E>),handle:W.Handle<S>,view:V,payload:P,output:O) -> P & (O & Maybe<&2,E>):
+  body(handle,view,payload,output)
+def whole_output_caps_direct(~S:Data,~full:L.Layout,~route:L.Route,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>)) -> Q.GeneralOutputWriter<S,State.Scope<S,L.columns(~S,full),R>,L.payload(full,route),L.view(full,route),O,E>:
+  Q.GeneralOutputWriter{whole_reader(~S,~full,~route,~R,~bound,~presence,~predicate),Out=>scope=>handle=>transform=>whole_modify(~S,~full,~route,~R,~bound,~presence,~predicate,Out,scope,handle,transform),whole_traverse(~S,~Unit,~Effects.Identity,~Effects.identity(),~full,~route,~R,~bound,~presence,~predicate,~O,~E,~pure_body(~S,~L.payload(full,route),~L.view(full,route),~O,~E,~body))}
+def whole_output_caps(~S:Data,~full:L.Layout,~route:L.Route,~C:Type,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>),same:{C == L.columns(~S,full) : Type}) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
+  %Equal.sym(Type,C,L.columns(~S,full),same) : Q.GeneralOutputWriter<S,State.Scope<S,_,R>,L.payload(full,route),L.view(full,route),O,E>
+  whole_output_caps_direct(~S,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~body)
+def output_provider(~S:Data,~WC:Type,~C:Type,~R:Type,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~local:{C == L.columns(~S,full) : Type},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:W.Handle<S> -> L.view(full,route) -> L.payload(full,route) -> O -> L.payload(full,route) & (O & Maybe<&2,E>)) -> Q.GeneralOutputWriter<S,State.Scope<S,C,R>,L.payload(full,route),L.view(full,route),O,E>:
+  whole_output_caps(~S,~full,~route,~C,~R,~bound,~presence,~predicate,~O,~E,~body,local)
+def whole_sequential_caps(~S:Data,~Permit:Data,~F:Type -> Type,~effects:Effects.Effects<F>,~full:L.Layout,~route:L.Route,~C:Type,~R:Type,~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode,same:{C == L.columns(~S,full) : Type}) -> Q.SequentialOutputEach<S,Permit,F,State.Scope<S,C,R>,O,E>:
+  %Equal.sym(Type,C,L.columns(~S,full),same) : Q.SequentialOutputEach<S,Permit,F,State.Scope<S,_,R>,O,E>
+  Q.SequentialOutputEach{scope=>output=>whole_traverse(~S,~Permit,~F,~effects,~full,~route,~R,~bound,~presence,~predicate,~O,~E,~body,mode,scope,output,Q.AllMatched{})}
+def sequential_provider(~S:Data,~WC:Type,~C:Type,~R:Type,~F:Type -> Type,~effects:Effects.Effects<F>,~Permit:Data,~full:L.Layout,~route:L.Route,~same:{WC == L.columns(~S,full) : Type},~valid:{L.grant_valid(~full,~route) == True{} : Bool},~local:{C == L.columns(~S,full) : Type},~bound:Recipe.Bound,~presence:Match.Presence,~predicate:Maybe<&2,L.view(full,route)> -> Bool,~O:Type,~E:Data,~body:Q.SequentialGeneralBody(~S,~Permit,~F,~L.payload(full,route),~L.view(full,route),~O,~E),mode:Q.Mode) -> Q.SequentialOutputEach<S,Permit,F,State.Scope<S,C,R>,O,E>:
+  whole_sequential_caps(~S,~Permit,~F,~effects,~full,~route,~C,~R,~bound,~presence,~predicate,~O,~E,~body,mode,local)
+def provider_dictionary(~S:Data,~WC:Type,~C:Type,~R:Type,~Ops:Type,~selection:Build.GeneralProviderSelection(~S,~WC,~C,~R,~StateEffect.Transition(~State.Invocation<S>),~Ops)) -> Ops:
+  selection(ordinary_provider(~S,~WC,~C,~R),output_provider(~S,~WC,~C,~R),sequential_provider(~S,~WC,~C,~R,~StateEffect.Transition(~State.Invocation<S>),~StateEffect.dictionary(~State.Invocation<S>)))
