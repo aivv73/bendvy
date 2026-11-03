@@ -37,7 +37,7 @@ def add_undo(~W: Type, ~E: Data, tx: Tx<W, E>, inverse: W -> W) -> Tx<W, E>:
 
 # Commands and events are accumulated in reverse and reversed once at commit.
 # Stage an owned deferred command without executing it. Commit enqueues
-# commands in authored order; failure discards them. Visibility follows the
+# commands in authored order; transactional finish discards them on failure. Visibility follows the
 # command queue's explicit barrier, not transaction completion itself.
 def stage_command(~W:Type,~E:Data,tx:Tx<W,E>,command:Deferred.Command<W>) -> Tx<W,E>:
   match tx:
@@ -51,7 +51,7 @@ def stage(~W: Type, ~E: Data, tx: Tx<W, E>, command: W -> W) -> Tx<W, E>:
       Tx{world, undo, Deferred.Raw{command} <> commands, events,trace}
 
 # Stage one Data event, retaining publication order for successful commit.
-# Failure publishes none of this transaction's staged events. For affine
+# Transactional finish publishes none on failure. For affine
 # Type payload ownership/recovery use the separate owned-event APIs.
 def emit(~W: Type, ~E: Data, tx: Tx<W, E>, event: E) -> Tx<W, E>:
   match tx:
@@ -93,6 +93,21 @@ def finish(~W: Type, ~E: Data, ~Error: Data,
   match tx:
     case Tx{world, undo, commands, events,trace}:
       finish_world(~W, ~E, ~Error, ~enqueue, ~publish, world, undo, commands, events, outcome)
+
+# Ordinary completion preserves performed writes and authored work on either
+# outcome. Inverses are discarded; commands remain pending until a barrier.
+def finish_preserving(~W:Type,~E:Data,~Error:Data,~enqueue:W -> List<&1,Deferred.Command<W>> -> W,~publish:W -> List<&2,E> -> W,tx:Tx<W,E>,outcome:Outcome<Error>) -> Returned<W,Error>:
+  match tx:
+    case Tx{world,_,commands,events,_}:
+      committed=enqueue(world,List.reverse(&1,Deferred.Command<W>,commands))
+      Returned{publish(committed,List.reverse(&2,E,events)),outcome}
+
+# Trace settlement records retained effects independently of the body outcome.
+def finish_preserving_observed(~W:Type,~E:Data,~Error:Data,~enqueue:W -> List<&1,Deferred.Command<W>> -> W,~publish:W -> List<&2,E> -> W,tx:Tx<W,E>,+outcome:Outcome<Error>) -> Returned<W,Error> & TraceFacts.State:
+  match tx:
+    case Tx{world,_,commands,events,trace}:
+      committed=enqueue(world,List.reverse(&1,Deferred.Command<W>,commands))
+      (Returned{publish(committed,List.reverse(&2,E,events)),outcome},TraceFacts.settle(trace,True{}))
 
 # Begin a transaction with operation tracing enabled and an empty fact list.
 # Tracing observes operations; it does not strengthen rollback guarantees.

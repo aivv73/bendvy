@@ -20,7 +20,7 @@ type Declaration<-S:Data,-R:Type,-H:Type,-Ops:Type> is Type:
 def read(~S:Data,~C:Type,~R:Type,~E:Data,~V:Data,~project:R -> R & V,identity:Schema.Resource<S,R>) -> Declaration<S,R,T.Tx<W.World<S,C,R,E>,E>,Cap.ValueRead<T.Tx<W.World<S,C,R,E>,E>,V>>:
   Declaration{identity,Query.Read{},Cap.ValueRead{Res.tx_get(~S,~C,~R,~E,~V,~project)}}
 # Build whole-R read/replacement declaration. Setter consumes incoming R and
-# journals displaced R for ordinary rollback; it returns no recovery receipt.
+# journals displaced R until completion; it returns no recovery receipt.
 def write(~S:Data,~C:Type,~R:Type,~E:Data,~V:Data,~project:R -> R & V,identity:Schema.Resource<S,R>) -> Declaration<S,R,T.Tx<W.World<S,C,R,E>,E>,Cap.ValueWrite<T.Tx<W.World<S,C,R,E>,E>,R,V>>:
   Declaration{identity,Query.Write{},Cap.ValueWrite{Res.tx_get(~S,~C,~R,~E,~V,~project),Res.tx_replace(~S,~C,~R,~E)}}
 # Advanced declaration projection of operational caps; does not invoke them.
@@ -52,11 +52,10 @@ def returned(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,output:Out,re
     case T.Returned{world,T.Failure{error}}:Sys.Failed{world,error}
 def finished(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,result:T.Tx<W.World<S,C,R,E>,E> & (T.Outcome<Error> & Out)) -> Sys.Outcome<W.World<S,C,R,E>,Error,Out>:
   match result:
-    case (tx,(outcome,output)):returned(~S,~C,~R,~E,~Error,~Out,output,Cmd.tx_finish(~S,~C,~R,~E,~Error,tx,outcome))
+    case (tx,(outcome,output)):returned(~S,~C,~R,~E,~Error,~Out,output,Cmd.tx_finish_preserving(~S,~C,~R,~E,~Error,tx,outcome))
 # Invoke the opaque-owner body in one fresh ECS transaction with declaration caps.
-# Args and Out may own Type payloads. Success returns Out; failure rolls back
-# recorded ECS edits and discards Out. Deferred commands require a later barrier;
-# ordinary rollback is not owned recovery or reversal of external callback effects.
+# Args and Out may own Type payloads. Success returns Out; failure retains
+# performed ECS edits and discards Out. Authored commands require a later barrier.
 def runner(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~Args:Type,~Error:Data,~Out:Type,~declaration:Declaration<S,R,T.Tx<W.World<S,C,R,E>,E>,Ops(T.Tx<W.World<S,C,R,E>,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> Args -> H -> H & (T.Outcome<Error> & Out),world:W.World<S,C,R,E>,args:Args) -> Sys.Outcome<W.World<S,C,R,E>,Error,Out>:
   finished(~S,~C,~R,~E,~Error,~Out,Cap.invoke_owned(~Ops,~Args,~(T.Outcome<Error> & Out),~body,~T.Tx<W.World<S,C,R,E>,E>,~grant(~S,~R,~T.Tx<W.World<S,C,R,E>,E>,~Ops(T.Tx<W.World<S,C,R,E>,E>),declaration),args,T.begin(~W.World<S,C,R,E>,~E,world)))
 # Affine registry owner plus presentation slot, indexed by declared access mode.
@@ -98,8 +97,7 @@ def returned_observed(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,outp
     case (value,trace):(returned(~S,~C,~R,~E,~Error,~Out,output,value),trace)
 # Same user body and grants, with detached transaction facts returned beside it.
 # Advanced runner finish adapter retaining detached transaction facts separately
-# from World outcome. Same commit/rollback and failure-Out disposal as runner;
-# attempted facts are not evidence that failed transaction writes committed.
+# from World outcome. Same retained effects and failure-Out disposal as runner.
 def finished_observed(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,result:T.Tx<W.World<S,C,R,E>,E> & (T.Outcome<Error> & Out)) -> Sys.Outcome<W.World<S,C,R,E>,Error,Out> & TraceFacts.State:
   match result:
-    case (tx,(outcome,output)):returned_observed(~S,~C,~R,~E,~Error,~Out,output,T.finish_observed(~W.World<S,C,R,E>,~E,~Error,~Cmd.enqueue(~S,~C,~R,~E),~Cmd.publish(~S,~C,~R,~E),tx,outcome))
+    case (tx,(outcome,output)):returned_observed(~S,~C,~R,~E,~Error,~Out,output,T.finish_preserving_observed(~W.World<S,C,R,E>,~E,~Error,~Cmd.enqueue(~S,~C,~R,~E),~Cmd.publish(~S,~C,~R,~E),tx,outcome))

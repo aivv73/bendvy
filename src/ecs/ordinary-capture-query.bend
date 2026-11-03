@@ -8,6 +8,7 @@ import ./ordinary-system.bend as Ordinary
 import ./local.bend as Local
 import ./captures.bend as Capture
 import ./transaction.bend as T
+import ./commands.bend as Cmd
 # Capture lifecycle reuses Local; each completed run consumes its captured tick.
 # Advanced lowering of the closed query declaration into its typed grant
 # and membership predicate; it performs no traversal or capture mutation.
@@ -18,12 +19,12 @@ def finished(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~U:Data,~Out:Data,result:Fo
     case Fold.Executed{world,capture,T.Success{},values}:Local.Succeeded{world,capture,values}
     case Fold.Executed{world,capture,T.Failure{error},_}:Local.Failed{world,capture,error}
 # Advanced captured-query runner with explicit (args,cursor). Threads L
-# through selected rows while the ECS transaction journals World changes.
+# through selected rows while retaining performed World changes.
 # Failure retains returned capture but discards row outputs. Bypasses runtime
 # registration checks; ordinary callers use define/run or App capture add.
 def runner(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~query:Decl.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> L -> A -> H -> H & (L & (T.Outcome<U> & Out)),world:W.World<S,C,R,E>,capture:L,args:A & Maybe<&2,Tick.Tick>) -> Local.Outcome<W.World<S,C,R,E>,L,Q.Error<U>,List<&2,Out>>:
   match args:
-    case (args,cursor):finished(~S,~C,~R,~E,~L,~U,~Out,Fold.each_since(~S,~C,~R,~E,~L,~U,~Out,~Ops,~A,~plan(~S,~C,~R,~E,~L,~Ops,~A,~U,~Out,~query,~body),~body,args,cursor,capture,world))
+    case (args,cursor):finished(~S,~C,~R,~E,~L,~U,~Out,Fold.each_since_with(~S,~C,~R,~E,~L,~U,~Out,~Ops,~A,~plan(~S,~C,~R,~E,~L,~Ops,~A,~U,~Out,~query,~body),~body,~Cmd.tx_finish_preserving(~S,~C,~R,~E,~Q.Error<U>),args,cursor,capture,world))
 # Runtime-bound captured-query owner: a Local instance owns affine capture L
 # and a separate cursor tracks query lifecycle visibility. Keep both returned
 # parts together across runs; raw constructors are trusted administration.
@@ -63,7 +64,7 @@ def returned(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~Ops:Type -> Type,~A:Data,~
     case Local.Refused{world,instance,(args,_)}:Refused{world,Owner{instance,cursor},args}
 # Execute the checked captured-query registration at its retained cursor.
 # Completed success/error consume the captured execution tick; refusal preserves it.
-# Query failure rolls back recorded World changes but retains capture changes;
+# Query failure retains performed World changes and returned capture changes;
 # registration refusal returns original args without running body. Deferred
 # commands remain invisible until explicit barriers.
 def run(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~query:Decl.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> L -> A -> H -> H & (L & (T.Outcome<U> & Out)),owner:Owner<S,C,R,E,L,Ops,A,U,Out,query,body>,world:W.World<S,C,R,E>,args:A) -> Run<W.World<S,C,R,E>,Owner<S,C,R,E,L,Ops,A,U,Out,query,body>,A,Q.Error<U>,Out>:

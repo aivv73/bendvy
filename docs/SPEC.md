@@ -51,8 +51,16 @@ selection of fixes; they do not require retaining the generalized substrate.
 The first independently reapplied behavior is schedule continuation after a
 returned system or condition error. Later steps and explicit barriers run with
 the actual returned owners; the completed schedule retains its first error.
-This does not change body transaction rollback, add an implicit final barrier,
-or catch fatal runtime failures.
+This does not add an implicit final barrier or catch fatal runtime failures.
+
+The next reapplied behavior retains immediate writes, authored deferred commands
+and Data events after returned body errors in ordinary component queries,
+captured queries, whole/field resource systems and resource Local systems.
+The original error is returned and failed outputs are discarded. Deferred work
+still requires an explicit barrier. Explicit Compose and owned-Compose
+transactions keep rollback. Reader, lifetime, linked-cleanup and owned-event
+completion policies have not been ported by this step. The ordinary paths still
+build inverse journals during execution; eliminating that allocation is separate.
 
 ## Sequential execution, user amendment, 2026-10-31 UTC
 

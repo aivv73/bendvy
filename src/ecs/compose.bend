@@ -239,21 +239,26 @@ def finish_returned(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,
   match returned:
     case T.Returned{world,T.Success{}}: Executed{world,T.Success{},values}
     case T.Returned{world,T.Failure{error}}: Executed{world,T.Failure{error},[]}
-def finished(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,observed: T.Tx<W.World<S,Store,R,E>,E> & (T.Outcome<Error<U>> & List<&2,Out>)) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
+def finished_with(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,~finish:T.Tx<W.World<S,Store,R,E>,E> -> T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>>,observed: T.Tx<W.World<S,Store,R,E>,E> & (T.Outcome<Error<U>> & List<&2,Out>)) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
   match observed:
-    case (tx,(result,values)): finish_returned(~S,~Store,~R,~E,~U,~Out,values,Cmd.tx_finish(~S,~Store,~R,~E,~Error<U>,tx,result))
+    case (tx,(result,values)): finish_returned(~S,~Store,~R,~E,~U,~Out,values,finish(tx,result))
+def finished(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,observed: T.Tx<W.World<S,Store,R,E>,E> & (T.Outcome<Error<U>> & List<&2,Out>)) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
+  finished_with(~S,~Store,~R,~E,~U,~Out,~Cmd.tx_finish(~S,~Store,~R,~E,~Error<U>),observed)
 # Advanced engine adapter: execute a supplied handle list within one new Tx and
 # finish it, using cursor for every row. Preserves supplied order without itself
 # validating list provenance; hierarchy adapters perform their own live filtering.
 def scope_finished(~S:Data,~Store:Type,~R:Type,~E:Data,~U:Data,~Out:Data,owned:Bool,result:Executed<W.World<S,Store,R,E>,Error<U>,Out>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
   match result:
     case Executed{world,outcome,values}:Executed{W.finish_run(~S,~Store,~R,~E,owned,world),outcome,values}
-def reserved_scoped(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),args: A,cursor: Maybe<&2,Tick.Tick>,handles:List<&2,W.Handle<S>>,admitted:W.World<S,Store,R,E> & Bool) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
+def reserved_scoped(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),~finish:T.Tx<W.World<S,Store,R,E>,E> -> T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>>,args: A,cursor: Maybe<&2,Tick.Tick>,handles:List<&2,W.Handle<S>>,admitted:W.World<S,Store,R,E> & Bool) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
   (world,owned)=admitted
-  scope_finished(~S,~Store,~R,~E,~U,~Out,owned,finished(~S,~Store,~R,~E,~U,~Out,run_handles(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,handles,args,cursor,T.begin(~W.World<S,Store,R,E>,~E,world))))
-def reserved(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
+  scope_finished(~S,~Store,~R,~E,~U,~Out,owned,finished_with(~S,~Store,~R,~E,~U,~Out,~finish,run_handles(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,handles,args,cursor,T.begin(~W.World<S,Store,R,E>,~E,world))))
+# Completion is selected by the closed runner, outside the row traversal.
+def reserved_with(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),~finish:T.Tx<W.World<S,Store,R,E>,E> -> T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>>,args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
   (world,handles)=observed
-  reserved_scoped(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,args,cursor,handles,W.ensure_run(~S,~Store,~R,~E,world))
+  reserved_scoped(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,~finish,args,cursor,handles,W.ensure_run(~S,~Store,~R,~E,world))
+def reserved(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out>:
+  reserved_with(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,~Cmd.tx_finish(~S,~Store,~R,~E,~Error<U>),args,cursor,observed)
 # Snapshot live handles in allocator-visible order; deferred commands stay invisible.
 # Snapshot allocator-visible live handles, then select and execute rows in that
 # order within ONE enclosing transaction, with no prior cursor. Later reads observe
@@ -345,21 +350,23 @@ def finish_returned_observed(~S:Data,~Store:Type,~R:Type,~E:Data,~U:Data,~Out:Da
   match result:
     case (returned,trace):(finish_returned(~S,~Store,~R,~E,~U,~Out,values,returned),trace)
 
-def finished_observed(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,observed: T.Tx<W.World<S,Store,R,E>,E> & (T.Outcome<Error<U>> & List<&2,Out>)) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
+def finished_observed(~S: Data,~Store: Type,~R: Type,~E: Data,~U: Data,~Out: Data,~finish:T.Tx<W.World<S,Store,R,E>,E> -> @+outcome:T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>> & TraceFacts.State,observed: T.Tx<W.World<S,Store,R,E>,E> & (T.Outcome<Error<U>> & List<&2,Out>)) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
   match observed:
-    case (tx,(result,values)): finish_returned_observed(~S,~Store,~R,~E,~U,~Out,values,T.finish_observed(~W.World<S,Store,R,E>,~E,~Error<U>,~Cmd.enqueue(~S,~Store,~R,~E),~Cmd.publish(~S,~Store,~R,~E),tx,result))
+    case (tx,(result,values)): finish_returned_observed(~S,~Store,~R,~E,~U,~Out,values,finish(tx,result))
 # Trace-aware advanced supplied-list execution adapter. Retains the same one-Tx
 # finish and output-clearing behavior as reserved, returning actual trace state
 # separately; operation facts do not assert that failed writes committed.
 def scope_observed(~S:Data,~Store:Type,~R:Type,~E:Data,~U:Data,~Out:Data,owned:Bool,result:Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
   (executed,trace)=result
   (scope_finished(~S,~Store,~R,~E,~U,~Out,owned,executed),trace)
-def reserved_observed_scoped(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),trace:TraceFacts.State,args: A,cursor: Maybe<&2,Tick.Tick>,handles:List<&2,W.Handle<S>>,admitted:W.World<S,Store,R,E> & Bool) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
+def reserved_observed_scoped(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),~finish:T.Tx<W.World<S,Store,R,E>,E> -> @+outcome:T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>> & TraceFacts.State,trace:TraceFacts.State,args: A,cursor: Maybe<&2,Tick.Tick>,handles:List<&2,W.Handle<S>>,admitted:W.World<S,Store,R,E> & Bool) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
   (world,owned)=admitted
-  scope_observed(~S,~Store,~R,~E,~U,~Out,owned,finished_observed(~S,~Store,~R,~E,~U,~Out,run_handles(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,handles,args,cursor,T.begin_with_trace(~W.World<S,Store,R,E>,~E,world,trace))))
-def reserved_observed(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),trace:TraceFacts.State,args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
+  scope_observed(~S,~Store,~R,~E,~U,~Out,owned,finished_observed(~S,~Store,~R,~E,~U,~Out,~finish,run_handles(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,handles,args,cursor,T.begin_with_trace(~W.World<S,Store,R,E>,~E,world,trace))))
+def reserved_observed_with(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),~finish:T.Tx<W.World<S,Store,R,E>,E> -> @+outcome:T.Outcome<Error<U>> -> T.Returned<W.World<S,Store,R,E>,Error<U>> & TraceFacts.State,trace:TraceFacts.State,args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
   (world,handles)=observed
-  reserved_observed_scoped(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,trace,args,cursor,handles,W.ensure_run(~S,~Store,~R,~E,world))
+  reserved_observed_scoped(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,~finish,trace,args,cursor,handles,W.ensure_run(~S,~Store,~R,~E,world))
+def reserved_observed(~S: Data,~Store: Type,~R: Type,~E: Data,~Ops: Type -> Type,~A: Data,~U: Data,~Out: Data,~plan: Plan<S,Store,R,E,Ops>,~body: @-H: Type -> @-caps: Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),trace:TraceFacts.State,args: A,cursor: Maybe<&2,Tick.Tick>,observed: W.World<S,Store,R,E> & List<&2,W.Handle<S>>) -> Executed<W.World<S,Store,R,E>,Error<U>,Out> & TraceFacts.State:
+  reserved_observed_with(~S,~Store,~R,~E,~Ops,~A,~U,~Out,~plan,~body,~T.finish_observed(~W.World<S,Store,R,E>,~E,~Error<U>,~Cmd.enqueue(~S,~Store,~R,~E),~Cmd.publish(~S,~Store,~R,~E)),trace,args,cursor,observed)
 # Snapshot live handles in allocator-visible order; deferred commands stay invisible.
 # As each_since with supplied operation trace state returned alongside Executed.
 # Tracing does not change capability authority or apply pending commands. Facts

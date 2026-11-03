@@ -29,6 +29,11 @@ def publish(~S: Data,~C: Type,~R: Type,~E: Data,world: W.World<S,C,R,E>,events: 
 def tx_finish(~S: Data,~C: Type,~R: Type,~E: Data,~Error: Data,tx: T.Tx<W.World<S,C,R,E>,E>,outcome: T.Outcome<Error>) -> T.Returned<W.World<S,C,R,E>,Error>:
   T.finish(~W.World<S,C,R,E>,~E,~Error,~enqueue(~S,~C,~R,~E),~publish(~S,~C,~R,~E),tx,outcome)
 
+# Ordinary completion retains writes, commands and Data events on body error.
+# Preserve the original outcome and leave structural application to a barrier.
+def tx_finish_preserving(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,tx:T.Tx<W.World<S,C,R,E>,E>,outcome:T.Outcome<Error>) -> T.Returned<W.World<S,C,R,E>,Error>:
+  T.finish_preserving(~W.World<S,C,R,E>,~E,~Error,~enqueue(~S,~C,~R,~E),~publish(~S,~C,~R,~E),tx,outcome)
+
 def spawned(~S: Data,~C: Type,~R: Type,~E: Data,~P: Type,~populate: W.World<S,C,R,E> -> W.Handle<S> -> P -> W.World<S,C,R,E>,activated: W.World<S,C,R,E> & W.Status,handle: W.Handle<S>,payload: P) -> W.World<S,C,R,E>:
   match activated:
     case (world,W.Accepted{}): populate(world,handle,payload)

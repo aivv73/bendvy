@@ -40,12 +40,11 @@ def generate(schema,namespace=1):
    if before[0]==failAt:failed=actual;break
    outputs.append(actual)
   if failed:
-   for entity,value,stamp in reversed(undo):values[entity-1]=value;stamps[entity]=stamp;order=[entity]+[i for i in order if i!=entity]
    outputs=[];status='Failed:Captured.CallbackFailure.UserError.Deliberate:'+row(failed)+':[Ran(1), Ran(2)]'
   else:status='Finished:[Ran(1), Ran(2)]'
   cursor=this_run
   text+=label+':'+status+'|'+snapshot()+'\n'
- assert clock==cursor==9 and auditcursor==8 and values==[[20,21,22,23],[21,22,23,24]]and pack==[5,6,43,44]and outputs==[]
+ assert clock==cursor==9 and auditcursor==8 and values==[[40,41,42,43],[41,42,43,44]]and pack==[5,6,43,44]and outputs==[]
  return(text+'\n').encode()
 if __name__=='__main__':
  (P/'expected.stdout').write_bytes(generate('Workshop'))

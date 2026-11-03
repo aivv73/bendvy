@@ -27,9 +27,9 @@ def returned(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~Error:Data,~Out:Type,local
     case T.Returned{world,T.Failure{error}}:Local.Failed{world,local,error}
 def finished(~S:Data,~C:Type,~R:Type,~E:Data,~L:Type,~Error:Data,~Out:Type,result:T.Tx<W.World<S,C,R,E>,E> & (L & (T.Outcome<Error> & Out))) -> Local.Outcome<W.World<S,C,R,E>,L,Error,Out>:
   match result:
-    case (tx,(local,(outcome,output))):returned(~S,~C,~R,~E,~L,~Error,~Out,local,output,Cmd.tx_finish(~S,~C,~R,~E,~Error,tx,outcome))
+    case (tx,(local,(outcome,output))):returned(~S,~C,~R,~E,~L,~Error,~Out,local,output,Cmd.tx_finish_preserving(~S,~C,~R,~E,~Error,tx,outcome))
 # Execute one resource declaration/body with opaque Tx capabilities and actual L.
-# Finish the ECS transaction using the returned outcome. Body-returned Local
+# Preserve performed ECS effects and the returned outcome. Body-returned Local
 # persists on success AND failure; failed Out is discarded, not returned as recovery.
 # Args is consumed by the callback. This is Local execution, not captured-query
 # state rollback, and arbitrary external callback effects are not transactional.

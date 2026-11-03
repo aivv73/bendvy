@@ -92,7 +92,7 @@ def body(~H:Type,~caps:Ops(H),capture:Capture,args:Args,owner:H) -> H & (Capture
   ...
 ```
 
-Return both the opaque capability owner and capture on every branch. The capture moves from row to row and remains in the registered invocation after a failed run. World writes roll back when the query fails; capture changes survive. The typed callback error is retained through `Captured.CallbackFailure{error}`. A successful run retains its complete Data row-output list; a failed run retains the callback error and clears that list, including outputs from earlier successful rows.
+Return both the opaque capability owner and capture on every branch. The capture moves from row to row and remains in the registered invocation after a failed run. Performed World writes and capture changes survive a returned query error. The typed callback error is retained through `Captured.CallbackFailure{error}`. A successful run retains its complete Data row-output list; a failed run retains the callback error and clears that list, including outputs from earlier successful rows.
 
 `Captured.add` takes a query declaration, `Capture:Type`, `Args:Data`, `Error:Data` and `Out:Data`. Registration refusal returns the original App and the original capture to `failed`. The factory's `Application`, `execution_owners`, `execution_rows`, `execution_observe`, `execution_fold`, `execution_plan`, `execution_dispatch` and `execution_provide` aliases name the extended App's indices. Its registration fields are refreshed from the actual retained owner after execution.
 

@@ -6,6 +6,7 @@ import ./compose.bend as Q
 import ./world.bend as W
 import ./system.bend as Sys
 import ./transaction.bend as T
+import ./commands.bend as Cmd
 import ./ordinary-query-observable.bend as O
 import ./inspector.bend as I
 
@@ -41,12 +42,12 @@ def completed(~S:Data,~C:Type,~R:Type,~E:Data,~U:Data,~Out:Data,result:Q.Execute
     case Q.Executed{world,T.Success{},values}:Sys.Succeeded{world,values}
     case Q.Executed{world,T.Failure{error},_}:Sys.Failed{world,error}
 # Lower-level query execution with Data arguments and explicit lifecycle
-# cursor. Runs the enclosing Compose transaction over selected rows; failure
-# reports query error and discards row outputs. This bypasses Registry checks;
+# cursor. Failure preserves performed effects, reports query error and discards
+# row outputs. This bypasses Registry checks;
 # use define/run or App registration for ordinary runtime-bound execution.
 def runner(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~query:Query.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),world:W.World<S,C,R,E>,args:A & Maybe<&2,Tick.Tick>) -> Sys.Outcome<W.World<S,C,R,E>,Q.Error<U>,List<&2,Out>>:
   match args:
-    case (args,cursor):completed(~S,~C,~R,~E,~U,~Out,Q.each_since(~S,~C,~R,~E,~Ops,~A,~U,~Out,~plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body),~body,args,world,cursor))
+    case (args,cursor):completed(~S,~C,~R,~E,~U,~Out,Q.reserved_with(~S,~C,~R,~E,~Ops,~A,~U,~Out,~plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body),~body,~Cmd.tx_finish_preserving(~S,~C,~R,~E,~Q.Error<U>),args,cursor,W.handles(~S,~C,~R,~E,world)))
 def registered(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~query:Query.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),slot:String,clauses:List<&2,Query.Clause<S>>,result:Sys.RegistrationResult<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body)>) -> Defined<S,W.World<S,C,R,E>,Sys.Registry<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body)>>:
   match result:
     case Sys.RegistrationFailed{world}:Rejected{world}
@@ -64,7 +65,7 @@ def run_cursor(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data
 # Returns System.RunResult plus retained slot/clauses; Registry is inside
 # the RunResult and can be rewrapped as Owner. Success advances cursor to
 # the captured execution tick; completed failure consumes it too. Row transaction
-# rollback and deferred visibility follow Compose/explicit barriers.
+# effects survive failure; deferred visibility follows explicit barriers.
 def run(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~query:Query.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>)>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),owner:Owner<S,Sys.Registry<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body)>>,world:W.World<S,C,R,E>,args:A) -> Sys.RunResult<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body)> & (String & List<&2,Query.Clause<S>>):
   match owner:
     case Owner{registry,slot,clauses}:run_cursor(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body,slot,clauses,Sys.cursor(~S,~C,~R,~E,~(A & Maybe<&2,Tick.Tick>),~Q.Error<U>,~List<&2,Out>,~runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~query,~body),registry),world,args)
@@ -78,11 +79,11 @@ def run(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:D
 def observable_plan(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~V:Data,~query:O.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>),I.Frame<S,C,R,E>,V>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out)) -> Q.Plan<S,C,R,E,Ops>:
   plan_parts(~S,~C,~R,~E,~Ops,O.operational(~S,~Q.Frame<S,C,R,E>,~Ops(Q.Frame<S,C,R,E>),~I.Frame<S,C,R,E>,~V,query))
 # Lower-level observable-declaration query runner with explicit cursor.
-# Executes operational grants in the Compose transaction; runtime registration
+# Executes operational grants with preserving completion; runtime registration
 # validation belongs to observable_run or the derived App dispatch path.
 def observable_runner(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~V:Data,~query:O.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>),I.Frame<S,C,R,E>,V>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),world:W.World<S,C,R,E>,args:A & Maybe<&2,Tick.Tick>) -> Sys.Outcome<W.World<S,C,R,E>,Q.Error<U>,List<&2,Out>>:
   match args:
-    case (args,cursor):completed(~S,~C,~R,~E,~U,~Out,Q.each_since(~S,~C,~R,~E,~Ops,~A,~U,~Out,~observable_plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body),~body,args,world,cursor))
+    case (args,cursor):completed(~S,~C,~R,~E,~U,~Out,Q.reserved_with(~S,~C,~R,~E,~Ops,~A,~U,~Out,~observable_plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body),~body,~Cmd.tx_finish_preserving(~S,~C,~R,~E,~Q.Error<U>),args,cursor,W.handles(~S,~C,~R,~E,world)))
 def observable_registered(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~V:Data,~query:O.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>),I.Frame<S,C,R,E>,V>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),slot:String,clauses:List<&2,Query.Clause<S>>,result:Sys.RegistrationResult<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,observable_runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body)>) -> Defined<S,W.World<S,C,R,E>,Sys.Registry<S,C,R,E,A & Maybe<&2,Tick.Tick>,Q.Error<U>,List<&2,Out>,observable_runner(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body)>>:
   match result:
     case Sys.RegistrationFailed{world}:Rejected{world}
@@ -111,4 +112,4 @@ def completed_observed(~S:Data,~C:Type,~R:Type,~E:Data,~U:Data,~Out:Data,result:
 # another system or consume detached Inspector visibility.
 def observable_runner_observed(~S:Data,~C:Type,~R:Type,~E:Data,~Ops:Type -> Type,~A:Data,~U:Data,~Out:Data,~V:Data,~query:O.Declaration<S,Q.Frame<S,C,R,E>,Ops(Q.Frame<S,C,R,E>),I.Frame<S,C,R,E>,V>,~body:@-H:Type -> @-caps:Ops(H) -> A -> H -> H & (T.Outcome<U> & Out),trace:TraceFacts.State,world:W.World<S,C,R,E>,args:A & Maybe<&2,Tick.Tick>) -> Sys.Outcome<W.World<S,C,R,E>,Q.Error<U>,List<&2,Out>> & TraceFacts.State:
   match args:
-    case (args,cursor):completed_observed(~S,~C,~R,~E,~U,~Out,Q.each_since_observed(~S,~C,~R,~E,~Ops,~A,~U,~Out,~observable_plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body),~body,trace,args,world,cursor))
+    case (args,cursor):completed_observed(~S,~C,~R,~E,~U,~Out,Q.reserved_observed_with(~S,~C,~R,~E,~Ops,~A,~U,~Out,~observable_plan(~S,~C,~R,~E,~Ops,~A,~U,~Out,~V,~query,~body),~body,~T.finish_preserving_observed(~W.World<S,C,R,E>,~E,~Q.Error<U>,~Cmd.enqueue(~S,~C,~R,~E),~Cmd.publish(~S,~C,~R,~E)),trace,args,cursor,W.handles(~S,~C,~R,~E,world)))

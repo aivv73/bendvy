@@ -9,7 +9,7 @@ bash examples/captured-query/run.sh js
 bash examples/captured-query/run.sh native
 ```
 
-The output shows four checkpoints: initial state, deliberate failure on the second row, successful retry, and an unchanged run. On failure, both rows' component writes roll back while the owned capture keeps the changes made by both callbacks. The typed error includes the failed row's before/intermediate/after values. A failed run clears row outputs; retry supplies a fresh component-change input and retains both successful outputs. Executed failures advance the lifecycle cursor as in Bevy; changing arguments alone would not replay already-observed changes. The last run's changed filter selects no rows, so its output list is empty and the capture remains unchanged.
+The output shows four checkpoints: initial state, deliberate failure on the second row, successful retry, and an unchanged run. On failure, both rows' component writes and the owned capture keep the changes made by both callbacks. The typed error includes the failed row's before/intermediate/after values. A failed run clears row outputs; retry supplies a fresh component-change input and retains both successful outputs. Executed failures advance the lifecycle cursor as in Bevy; changing arguments alone would not replay already-observed changes. The last run's changed filter selects no rows, so its output list is empty and the capture remains unchanged.
 
 Read the files in this order:
 

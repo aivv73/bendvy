@@ -18,10 +18,22 @@ for consumers such as the browser examples. Their transaction owner retains the
 actual World. Recorded changes roll back on failure, and failed transactions
 discard staged commands and events. [`schedule`](../../src/ecs/schedule.bend)
 continues later steps and explicit barriers after a returned system error,
-retaining the first error and the final actual owners. Transactional body
-rollback still differs from the later nontransactional requirements in SPEC.
+retaining the first error and the final actual owners.
+
+Ordinary component/captured queries, whole/field resource systems and resource
+Local systems select preserving completion instead. Performed writes, authored
+commands and Data events survive a returned body error; the original error
+remains and failed outputs are discarded. Commands still require an explicit
+barrier. Inverse journals are still built during execution. Reader, lifetime,
+linked-cleanup and owned-event completion remain outside this port.
 Historical qualification of the removed executor does not qualify those
-requirements on this core.
+remaining requirements on this core.
+
+This completion boundary follows Bevy's
+[single-threaded executor](https://github.com/bevyengine/bevy/blob/ad678262ce53b5d142fe49ee5e08caff6f00ab60/crates/bevy_ecs/src/schedule/executor/single_threaded.rs#L132-L166),
+which passes the live World to a system, handles its returned error, and retains
+that system for later deferred application. It does not restore a World snapshot
+when the body returns an error.
 
 The baseline already includes epoch-aware change ticks, declared read/write
 capabilities and save refusal before projection when structural work is pending.
