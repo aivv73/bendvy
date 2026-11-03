@@ -27,10 +27,10 @@ type Schedule<S: Data,C: Type,R: Type,E: Data,H: Type> is Type:
 type Build<S: Data,C: Type,R: Type,E: Data,H: Type> is Type:
   Built{schedule: Schedule<S,C,R,E,H>}
   Invalid{owners: H}
-# Every result returns Schedule with actual runner owners and World. Failed stops
-# at the first failed dispatch and keeps observations through that system; earlier
-# successful systems are not rolled back as one schedule-wide transaction. Rejected
-# is namespace admission refusal and runs no steps.
+# Every result returns Schedule with actual runner owners and World. Failed
+# retains the first returned error after the remaining steps run. Each runner
+# determines its own write policy. Rejected refuses namespace admission before
+# any step runs.
 type RunResult<S: Data,C: Type,R: Type,E: Data,H: Type,Error: Data> is Type:
   Finished{schedule: Schedule<S,C,R,E,H>,world: W.World<S,C,R,E>,observations: List<&2,Observation>}
   Failed{schedule: Schedule<S,C,R,E,H>,world: W.World<S,C,R,E>,error: Error,observations: List<&2,Observation>}
@@ -61,9 +61,15 @@ def build(~S: Data,~C: Type,~R: Type,~E: Data,~H: Type,+namespace: U32,+name: St
 
 # Continuations keep recursion structurally decreasing on the plan, rather
 # than moving affine owners into runtime closures stored in the schedule.
+def failure_returned(~S: Data,~C: Type,~R: Type,~E: Data,~H: Type,~Error: Data,error: Error,result: RunResult<S,C,R,E,H,Error>) -> RunResult<S,C,R,E,H,Error>:
+  match result:
+    case Finished{schedule,world,observations}:Failed{schedule,world,error,observations}
+    case Failed{schedule,world,_,observations}:Failed{schedule,world,error,observations}
+    case Rejected{schedule,world}:Rejected{schedule,world}
+
 def after_outcome(~S: Data,~C: Type,~R: Type,~E: Data,~H: Type,~Error: Data,next: H -> W.World<S,C,R,E> -> List<&2,Observation> -> RunResult<S,C,R,E,H,Error>,outcome: Sys.Outcome<W.World<S,C,R,E>,Error,Unit>,owners: H,+namespace: U32,+name: String,+all: List<&2,Step>,+observations: List<&2,Observation>,+id: U32) -> RunResult<S,C,R,E,H,Error>:
   match outcome:
-    case Sys.Failed{world,error}: Failed{Schedule{namespace,name,all,owners},world,error,List.append(&2,Observation,observations,[Ran{id}])}
+    case Sys.Failed{world,error}: failure_returned(~S,~C,~R,~E,~H,~Error,error,next(owners,world,List.append(&2,Observation,observations,[Ran{id}])))
     case Sys.Succeeded{world,_}: next(owners,world,List.append(&2,Observation,observations,[Ran{id}]))
 
 def after_dispatch(~S: Data,~C: Type,~R: Type,~E: Data,~H: Type,~Error: Data,next: H -> W.World<S,C,R,E> -> List<&2,Observation> -> RunResult<S,C,R,E,H,Error>,result: H & Sys.Outcome<W.World<S,C,R,E>,Error,Unit>,+namespace: U32,+name: String,+all: List<&2,Step>,+observations: List<&2,Observation>,+id: U32) -> RunResult<S,C,R,E,H,Error>:
@@ -111,7 +117,7 @@ def run_namespace(~S: Data,~C: Type,~R: Type,~E: Data,~H: Type,~Error: Data,~dis
 
 # Run static steps in order after matching Schedule and World namespaces.
 # Evaluate condition by its slot; false records Skipped without dispatch. True
-# threads the actual H through dispatch, stopping on Sys.Failed. Barriers call
+# threads the actual H through dispatch, continuing after Sys.Failed. Barriers call
 # W.barrier; no implicit final barrier is added. Callbacks are trusted closed
 # providers, not arbitrary capabilities inferred from ids. See ordinary App
 # schedule setup in examples/scheduled-health/application.bend.

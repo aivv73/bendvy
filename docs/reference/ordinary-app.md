@@ -135,13 +135,13 @@ Execution.Run{result,batch}
 The `result` retains the scheduled App in every case:
 
 - `Schedule.Finished{app,observations}` completes the schedule.
-- `Schedule.Failed{app,error,observations}` stops at the failed system.
+- `Schedule.Failed{app,error,observations}` returns the first error after the remaining steps complete.
 - `Schedule.Rejected{app}` rejects runtime registration or World authority.
 - `Schedule.Missing{app,requirements}` reports missing provisioning before any step, including the initial barrier.
 
 Feed the returned App into the next run or retry. Do not create a new World or register replacement owners to retry. Service availability is observed from the current owned slots on each run through the same canonical declaration and Setup.
 
-A condition that skips a system continues to the next step under the existing Schedule contract. A failed system stops the schedule. `Entry.run_when` preserves the explicit-condition route when a condition is needed.
+A condition that skips a system continues to the next step. Returned system or condition errors also allow later steps and explicit barriers to run; the final result retains the first error and the actual returned App. This does not change each runner's transaction policy. `Entry.run_when` preserves the explicit-condition route when a condition is needed.
 
 `Entry.replan` rebuilds the plan from the retained owners. It changes the name or barrier choice without registering systems again. `Entry.inspect` threads an explicit World projection through the App and returns the actual updated App with the projection result.
 

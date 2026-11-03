@@ -48,6 +48,12 @@ This amendment supersedes the following amendment's prohibition on restoring
 the historical implementation. The remaining capability requirements guide
 selection of fixes; they do not require retaining the generalized substrate.
 
+The first independently reapplied behavior is schedule continuation after a
+returned system or condition error. Later steps and explicit barriers run with
+the actual returned owners; the completed schedule retains its first error.
+This does not change body transaction rollback, add an implicit final barrier,
+or catch fatal runtime failures.
+
 ## Sequential execution, user amendment, 2026-10-31 UTC
 
 The user requests one sequential ordinary executor and a simpler structure.

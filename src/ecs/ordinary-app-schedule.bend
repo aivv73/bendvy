@@ -154,8 +154,8 @@ def conditions_provisioned(~S:Data,~C:Type,~R:Type,~E:Data,~H:Type,~Rows:Data,~o
     case SP.Missing{SP.Provisioned{Sch.Schedule{namespace,name,steps,(owners,bindings)},needs},world,missing}:Missing{ConditionedApplication{Application{App.Application{schema,Build.Registered{world,owners,recipe,debug}},plan,namespace,name,steps,needs},bindings},missing}
     case SP.Executed{result,needs}:conditions_executed(~S,~C,~R,~E,~H,~Rows,~observe,~fold,~B,~select,~BodyError,~dispatch,schema,recipe,debug,plan,needs,result)
 # Execute with retained typed guard bindings and explicit provisioning.
-# False skips the body; unavailable/rejected conditions stop with their typed
-# error. Earlier successful steps and returned guard state remain retained.
+# False skips the body; unavailable/rejected conditions return a typed error
+# while later steps continue. Returned guard and application owners are retained.
 # No binding means unconditional execution; barriers alone apply deferred work.
 # Every RunResult branch returns the conditioned application owner.
 def run_conditions(~S:Data,~C:Type,~R:Type,~E:Data,~H:Type,~Rows:Data,~observe:W.World<S,C,R,E> -> W.World<S,C,R,E> & DTO.Observation<Rows>,~fold:H -> H & List<&2,Records.Fields<S>>,~B:Type,~select:B -> W.World<S,C,R,E> -> U32 -> Comp.Evaluation<W.World<S,C,R,E>,B>,~BodyError:Data,~dispatch:H -> W.World<S,C,R,E> -> U32 -> H & Sys.Outcome<W.World<S,C,R,E>,BodyError,Unit>,~provision:W.World<S,C,R,E> -> W.World<S,C,R,E> & List<&2,SP.Requirement<S>>,value:ConditionedApplication<S,C,R,E,H,Rows,observe,fold,B,select>) -> RunResult<ConditionedApplication<S,C,R,E,H,Rows,observe,fold,B,select>,S,Comp.Error<BodyError>>:

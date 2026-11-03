@@ -1,3 +1,4 @@
+import ../../../../src/ecs/change-tick.bend as Tick
 import Base
 import ../../../../src/ecs/ordinary-app-records.bend as Leaf
 import ../../../../src/ecs/ordinary-app-resource.bend as ResourceApp
@@ -117,8 +118,8 @@ def application(~S:Data) -> Type:
   Named.Application<S,Store,Resources,Unit,Owners(~S),Rows(),observe(~S),fold(~S)>
 def local_completed(~S:Data,result:Local.Run<S,Store,Resources,Unit,Memory,Unit,String,Unit,LF.runner(~S,~Store,~Resources,~Unit,~Memory,~Unit,~String,~Unit,~D.read_ops(~U32),~raw(~S),~local_body_owned)>) -> local_owner(~S) & Sys.Outcome<W.World<S,Store,Resources,Unit>,String,Unit>:
   match result:
-    case Local.Completed{world,instance,Done{_}}:(LF.Owner{instance},Sys.Succeeded{world,Unit{}})
-    case Local.Completed{world,instance,Fail{error}}:(LF.Owner{instance},Sys.Failed{world,error})
+    case Local.Completed{world,instance,Done{_},_}:(LF.Owner{instance},Sys.Succeeded{world,Unit{}})
+    case Local.Completed{world,instance,Fail{error},_}:(LF.Owner{instance},Sys.Failed{world,error})
     case Local.Refused{world,instance,_}:(LF.Owner{instance},Sys.Failed{world,"registration"})
 def first_done(~S:Data,second:local_owner(~S),reader:Reader(~S),result:local_owner(~S) & Sys.Outcome<W.World<S,Store,Resources,Unit>,String,Unit>) -> Owners(~S) & Sys.Outcome<W.World<S,Store,Resources,Unit>,String,Unit>:
   match result:
@@ -173,7 +174,7 @@ def mode_value(failed:Bool) -> U32:
   match failed:
     case False{}:9
     case True{}:99
-def advanced(~S:Data,schema:Schema.Schema<S,Store,Resources>,owners:Owners(~S),recipe:Tree.Recipe<W.World<S,Store,Resources,Unit>,Rows(),observe(~S)>,debug:Bool,plans:List<&2,Named.Named<S>>,result:W.World<S,Store,Resources,Unit> & U32) -> application(~S):
+def advanced(~S:Data,schema:Schema.Schema<S,Store,Resources>,owners:Owners(~S),recipe:Tree.Recipe<W.World<S,Store,Resources,Unit>,Rows(),observe(~S)>,debug:Bool,plans:List<&2,Named.Named<S>>,result:W.World<S,Store,Resources,Unit> & Tick.Tick) -> application(~S):
   match result:
     case (world,_):Named.Application{App.Application{schema,Build.Registered{world,owners,recipe,debug}},plans}
 def advance(~S:Data,value:application(~S)) -> application(~S):

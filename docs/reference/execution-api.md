@@ -17,9 +17,11 @@ sequential interfaces; the generalized `execution-app` interface has been remove
 for consumers such as the browser examples. Their transaction owner retains the
 actual World. Recorded changes roll back on failure, and failed transactions
 discard staged commands and events. [`schedule`](../../src/ecs/schedule.bend)
-stops after a failed system. This restored behavior differs from the later
-nontransactional continuation requirements in SPEC. Historical qualification of
-the removed executor does not qualify those requirements on this core.
+continues later steps and explicit barriers after a returned system error,
+retaining the first error and the final actual owners. Transactional body
+rollback still differs from the later nontransactional requirements in SPEC.
+Historical qualification of the removed executor does not qualify those
+requirements on this core.
 
 The baseline already includes epoch-aware change ticks, declared read/write
 capabilities and save refusal before projection when structural work is pending.
