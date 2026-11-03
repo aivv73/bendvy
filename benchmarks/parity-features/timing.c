@@ -43,7 +43,7 @@ Term io_feature_end_run(Env e, Term *f, IoWork *w) {
   return term_pak(CID(Unit), 0);
 }
 static void __attribute__((constructor)) io_feature_timer_use(void) {
-  io_eff(CID(begin), io_feature_begin_run, 0);
-  io_eff(CID(capture), io_feature_capture_run, 0);
-  io_eff(CID(end), io_feature_end_run, 0);
+  io_eff(CID(begin), io_feature_begin_run);
+  io_eff(CID(capture), io_feature_capture_run);
+  io_eff(CID(end), io_feature_end_run);
 }

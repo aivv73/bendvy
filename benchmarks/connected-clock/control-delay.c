@@ -14,5 +14,5 @@ Term io_connected_clock_control_delay_run(Env e, Term *f, IoWork *w) {
   return term_pak(CID(Unit), 0);
 }
 static void __attribute__((constructor)) io_connected_clock_control_delay_use(void) {
-  io_eff(CID(wait), io_connected_clock_control_delay_run, 0);
+  io_eff(CID(wait), io_connected_clock_control_delay_run);
 }
