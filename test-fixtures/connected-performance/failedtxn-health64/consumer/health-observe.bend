@@ -61,7 +61,7 @@ def audit_effect(text:String) -> String:audit_effect_copy(text)
 def audit(owner:Service.Slot<R.Audit>) -> Service.Slot<R.Audit> & String:
   match owner:
     case Service.Missing{}:(Service.Missing{},"Missing")
-    case Service.Ready{R.Recorded{+effects}}:(Service.Ready{R.Recorded{effects}},"Recorded" ++ List.show(&2,String,audit_effect,effects))
+    case Service.BendvyReady{R.Recorded{+effects}}:(Service.BendvyReady{R.Recorded{effects}},"Recorded" ++ List.show(&2,String,audit_effect,effects))
 def resources_join(left:T.HealthLedger & String,right:Service.Slot<R.Audit> & String) -> F.Resources() & String:
   (ledger,sl)=left
   (slot,sa)=right

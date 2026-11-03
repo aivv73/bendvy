@@ -1,5 +1,24 @@
 {
   "basisGit": "728110b98",
+  "currentBaseline": {
+    "coreCommit": "30f24c770f5c06f95e6cf30d579cf28aa733d3cd",
+    "policy": "Reader body effects remain transactional; failed stream acknowledgement is not committed. Registry records the captured entry tick on every executed outcome.",
+    "clockScope": "Existing 64-iteration scenario stays below 2^32: finite model uses integer logical ticks and renders complete epoch-zero timestamps. It does not model low-word wrap.",
+    "modelPins": {
+      "operation_model.py": "4121d330ce7b33f05018fd406cfd04526ba372b4dcc5cc5e73b2ef4528113c40",
+      "common_model.py": "cc8bd9482007013df4c22f2d2b19cb57710beaf5b672ae09d07abf4d8cea425f",
+      "ts_model.py": "b4e97da2101cfbb86bb62e59afb982286f23e63bf6b3330c72000d1072d07d94"
+    },
+    "sourcePins": {
+      "src/ecs/clock-state.bend": "4f07b78432c2d8fafae83b599edb98429fa2fdafec78a44138cb12ad3e359261",
+      "src/ecs/system.bend": "923a0d0971dc243cab7beca73883075b91644b93bca03799bf63a16e808e47c0",
+      "src/ecs/local.bend": "4de2d9408d4c34d9e6d80bdeffeddaf8fa04eb529c0159132b12f575acc141a8",
+      "src/ecs/world.bend": "cd340bde674783e4e72609264f1399f796a27073479572fb78f6bde3ed636f5e",
+      "src/ecs/event-notice-runtime.bend": "4e7fe1b45c9f5a5993f691581fc268508bfc2f72a62f092c548849667c683aa5",
+      "src/ecs/ordinary-reader-stream-parameter.bend": "48645232674da4f208f31b4c64ec337bb90d5a1239f73bc088b730f87939c512",
+      "src/ecs/ordinary-reader-system.bend": "6f177f02fc8428f39ec25062654ec904e8c9b7148455d3e0cf7919f3e5c14432"
+    }
+  },
   "originalModelPath": "experiments/s-perf/canonical-api-v1/failedtxn-runtime-v1/diagnostics/matched-timing-v1/health-v1/model/",
   "healthOperationModelSHA256": "62324b16b7be53183a9c0ccc39ca0c6b5c9c379cb321491603ba66bb63574543",
   "qualifiedCanonical": {

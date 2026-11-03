@@ -32,6 +32,16 @@ def sh_bool(v: bool) -> str:
     return "True" if v else "False"
 
 
+def tick_text(value: int) -> str:
+    # The existing finite 64-iteration scenario never reaches a low-word wrap.
+    assert 0 <= value < 2**32
+    return f"0:{value}"
+
+
+def cursor_text(value: int | None) -> str:
+    return "never" if value is None else tick_text(value)
+
+
 def json_four(v: list[int]) -> str:
     return '{"a":%d,"b":%d,"c":%d,"d":%d}' % tuple(v)
 
@@ -114,7 +124,7 @@ class Column:
                 return "some(Armor{" + tree([str(x) for x in layers]) + ";" + str(grade) + "})"
             return "some(Tracked{" + str(v) + "})"
         vals = tree([value(v) for v in self.values])
-        stamps = show_list(self.stamps, lambda e: f"{e[0]}:{e[1]}:{e[2]}")
+        stamps = show_list(self.stamps, lambda e: f"{e[0]}:{tick_text(e[1])}:{tick_text(e[2])}")
         return f"Column{{values={vals};stamps={stamps}}}"
 
 
@@ -196,6 +206,16 @@ class World:
     registrations: list[tuple[int, str, list[str]]] = field(default_factory=list)
     next_system: int = 1
     clock: int = 0
+    scopes: list[int] = field(default_factory=list)
+
+    def enter_run(self) -> int:
+        self.clock += 1
+        assert self.clock < 2**32
+        self.scopes.append(self.clock)
+        return self.clock
+
+    def leave_run(self) -> None:
+        self.scopes.pop()
 
     def reg(self, name: str, access: list[str]) -> int:
         ident = self.next_system
@@ -208,10 +228,14 @@ class World:
 
     def component_set(self, key: tuple[int, int], value: object, kind: str) -> None:
         assert self.allocator.is_live(key) or self.allocator.slots[key[0]].phase == "Pending"
-        self.clock += 1
+        if self.scopes:
+            tick = self.scopes[-1]
+        else:
+            self.clock += 1
+            tick = self.clock
         col = self.main if kind == "main" else self.aux if kind == "aux" else self.flag
         present = key[0] <= len(col.values) and col.values[key[0] - 1] is not None
-        col.replace(key[0], value, self.clock, present=present)
+        col.replace(key[0], value, tick, present=present)
 
     def publish_event(self, n: int) -> None:
         self.events.append(n)
@@ -241,7 +265,7 @@ def world_text(w: World) -> str:
     kinds = "".join(k + ";" for k in w.pending) + "end"
     regs = show_list(w.registrations, lambda r: f"{r[0]}:{r[1]}:{show_list(r[2],lambda x:x)}")
     return (f"namespace={w.ns}|allocator={{{w.allocator.render()}}}|store={{{store}}}|resource={{{resources}}}|"
-            f"events={ev}|pending={len(w.pending)}:{kinds}|registrations={regs}|nextSystem={w.next_system}|clock={w.clock}")
+            f"events={ev}|pending={len(w.pending)}:{kinds}|registrations={regs}|nextSystem={w.next_system}|clock={tick_text(w.clock)}")
 
 
 def access_json(kind: str, value) -> str:
@@ -319,8 +343,8 @@ class Meta:
     journal: list[Batch] = field(default_factory=list)
     route_tick: int = 0
     failures_tick: int = 0
-    b_cursor: int = 0
-    pub_cursor: int = 0
+    b_cursor: int | None = None
+    pub_cursor: int | None = None
 
     def pos(self, ident: int) -> Position | None:
         return next((p for p in self.positions if p.ident == ident), None)
@@ -389,6 +413,7 @@ class Model:
     boundaries: list[str] = field(default_factory=list)
     schedule_texts: list[str] = field(default_factory=list)
     spool: Path | None = None
+    dispose_cursor: int | None = None
 
     def provider_text(self, pub: bool) -> str:
         ident = 2 if pub else 1
@@ -396,7 +421,7 @@ class Model:
         cursor = self.meta.pub_cursor if pub else self.meta.b_cursor
         access = READ_ACCESS if pub else READ_ACCESS + COMP_ACCESS
         owner = f"facts={{ns={self.world.ns};id={ident};name={name};access={show_list(access,lambda x:x)}}};reader={{namespace={self.world.ns};id={ident};registryId={ident}}}"
-        return (f"registry={{ns={self.world.ns};id={ident};name={name};access={show_list(access,lambda x:x)};cursor={cursor}}};"
+        return (f"registry={{ns={self.world.ns};id={ident};name={name};access={show_list(access,lambda x:x)};cursor={cursor_text(cursor)}}};"
                 f"parameter={show_list(READ_ACCESS if pub else READ_ACCESS + COMP_ACCESS,lambda x:x)};declaration=Unit;owners={{{owner}}}")
 
     def instance_text(self, a: bool) -> str:
@@ -411,7 +436,7 @@ class Model:
 
     def dispose_registry_text(self) -> str:
         return (f"namespace={self.world.ns};id={self.dispose_id};name={lp('FailedTxn/DisposeTransient')};"
-                f"access={show_list(DISPOSE_ACCESS,lambda x:lp(x))};cursor=0")
+                f"access={show_list(DISPOSE_ACCESS,lambda x:lp(x))};cursor={cursor_text(self.dispose_cursor)}")
 
     def registered_text(self) -> str:
         registered = (f"a={{{self.instance_text(True)}}};b={{{self.instance_text(False)}}};"
@@ -511,6 +536,7 @@ class Model:
     def do_a(self, iteration: int) -> None:
         self.frame.phase = 1
         before_instance = self.instance_text(True)
+        self.world.enter_run()  # Local.run captures the A callback's write tick.
         self.a_capture += 1
         cap = self.a_capture
         old_levels, reserve, class_ = self.world.main.values[self.a_key[0] - 1]
@@ -533,14 +559,15 @@ class Model:
         self.world.pending.insert(0, "Raw")
         self.world.publish_event(event)
         self.frame.pending_a = key
+        self.world.leave_run()
         self.frame.calls.append(f"beforeLocal={{{before_instance}}};afterLocal={{{self.instance_text(True)}}};call={{{call}}}")
 
     def _reader_attempt(self, ident: int, *, callback_kind: str, iteration: int, fail: bool = False,
                         prime: bool = False) -> tuple[list[int], int, int]:
         """Run one typed reader boundary; returns (values, syncEpoch, routeTick)."""
+        self.world.enter_run()  # The ordinary reader's inner Sys.run.
         epoch = max(1, self.meta.route_tick, self.meta.failures_tick, self.world.clock)
         self.meta.ingest(self.world, epoch)
-        self.world.clock += 1
         attempt_tick = epoch + 1
         self.meta.route_tick = attempt_tick
         pos = self.meta.pos(ident)
@@ -555,9 +582,10 @@ class Model:
 
     def do_b(self, iteration: int, *, fail: bool, prime: bool = False) -> None:
         self.frame.phase = 0 if prime else 1 if fail else 3
-        old_registry_cursor = self.meta.b_cursor
         before_local = self.instance_text(False)
+        self.world.enter_run()  # The enclosing retained B Local owner.
         values, epoch, attempt_tick = self._reader_attempt(1, callback_kind="B", iteration=iteration, fail=fail, prime=prime)
+        captured_tick = self.world.scopes[-1]
         self.b_capture += 1
         capture = self.b_capture
         callback_facts = ""
@@ -605,18 +633,20 @@ class Model:
             # prepare returns readThrough=attempt_tick - 1 = epoch. The stream
             # and Sys.Registry cursors are separate values.
             self.meta.set_cursor(1, epoch)
-            self.meta.b_cursor = self.world.clock
             self.meta.ingest(self.world, attempt_tick)
         else:
-            # CallbackFailed skips RP.commit, after_success, and Sys cursor
-            # completion. Preparation's position activation stays.
+            # CallbackFailed skips RP.commit and after_success. The separate
+            # Sys.Registry still records its actual captured execution tick.
             pass
+        self.meta.b_cursor = captured_tick
         after = self.provider_text(False)
         if prime:
             call = f"B{{status=0;error=None;output={output}}}"
         else:
             call = f"B{{status={status};error={err};output={output}}}"
         self.b_capture = capture
+        self.world.leave_run()
+        self.world.leave_run()
         self.frame.calls.append(f"beforeLocal={{{before_local}}};afterLocal={{{self.instance_text(False)}}};call={{{call}}}")
         if not prime:
             if fail:
@@ -634,9 +664,9 @@ class Model:
 
     def do_publication(self, phase: int, iteration: int, prime: bool = False) -> None:
         self.frame.phase = phase
+        captured_tick = self.world.enter_run()
         epoch = max(1, self.meta.route_tick, self.meta.failures_tick, self.world.clock)
         self.meta.ingest(self.world, epoch)
-        self.world.clock += 1
         route_tick = epoch + 1
         self.meta.route_tick = route_tick
         if self.meta.pos(2) is None:
@@ -644,14 +674,15 @@ class Model:
         view = self.meta.events_since(2)
         before = self.provider_text(True)
         self.meta.set_cursor(2, epoch)
-        # Ordinary tracked Registry cursor captures the post-boundary World clock.
-        self.meta.pub_cursor = self.world.clock
+        self.meta.pub_cursor = captured_tick
         self.meta.ingest(self.world, route_tick)
+        self.world.leave_run()
         after = self.provider_text(True)
         read = (f"Some{{phase={phase};iteration={iteration};view={{values={show_list(view,event_text)};lagged=False}}}}")
         self.frame.calls.append(f"Publications{{before={{{before}}};after={{{after}}};status=0;read={read}}}")
 
     def do_barrier_spawns(self) -> None:
+        self.world.enter_run()
         # Each successful Tx prepends its reversed command buffer to the
         # global queue. W.drain_fifo recurses through the tail before applying
         # the head, so the pending list's order is reversed at application.
@@ -668,8 +699,10 @@ class Model:
             is_a = key == self.frame.pending_a
             payload = ([iteration, 20, 30, 40], 9, 2) if is_a else ([iteration, 200, 300, 400], 9, 2)
             self.world.component_set(key, payload, "main")
+        self.world.leave_run()
 
     def do_dispose(self) -> None:
+        self.dispose_cursor = self.world.enter_run()
         keys = [self.frame.pending_a, self.frame.retry_b]
         assert all(k is not None for k in keys)
         statuses = ["Accepted", "Accepted"]
@@ -677,6 +710,8 @@ class Model:
                  f"world={{{world_text(self.world)}}}")
         self.frame.calls.append(f"Dispose{{statuses={show_list(statuses)};facts={{{facts}}}}}")
         self.world.pending = ["Raw", "Raw"]
+        self.world.leave_run()
+        self.world.enter_run()  # The following explicit command barrier.
         for key in keys:
             idx, gen = key
             self.world.allocator.slots[idx].phase = "DeadRetained"
@@ -685,6 +720,7 @@ class Model:
             self.world.flag.clear_if_sized(idx)
             self.world.allocator.release(key)
         self.world.pending.clear()
+        self.world.leave_run()
 
 
 def empty_world_text(ns: int) -> str:
@@ -699,6 +735,7 @@ def populate_seed(world: World, count: int = N) -> list[tuple[int, int]]:
         key = world.reserve()
         reservations.append(key)
     # Seed transaction commits all Raw spawn commands, in reservation order.
+    world.enter_run()
     for j, key in enumerate(reservations):
         world.allocator.activate(key)
         levels = [j, j+1, j+2, j+3]
@@ -707,6 +744,7 @@ def populate_seed(world: World, count: int = N) -> list[tuple[int, int]]:
             world.component_set(key, ([1,2,3,4], 3), "aux")
         if j % 3 == 1:
             world.component_set(key, 8, "flag")
+    world.leave_run()
     return reservations
 
 
@@ -872,8 +910,8 @@ def generate(outdir: Path, count: int = N, iterations: int = ITERATIONS) -> dict
 def self_check() -> None:
     world, reservations, model = setup_model(1, N)
     assert world.ns == 1
-    assert world.clock == 107
-    assert model.meta.route_tick == 0 and model.meta.failures_tick == 107
+    assert world.clock == 1
+    assert model.meta.route_tick == 0 and model.meta.failures_tick == 1
     assert len(reservations) == 64 and reservations[0] == (1, 0) and reservations[-1] == (64, 0)
     assert world.ledger == [0, 101, 102, 103]
     assert world.audit == []
@@ -887,9 +925,9 @@ def self_check() -> None:
     model.spool = Path("/tmp/failedtxn-oracle-selfcheck-boundaries.txt")
     model.spool.unlink(missing_ok=True)
     schedule0(model)
-    assert (world.clock, model.meta.route_tick, model.meta.failures_tick) == (109, 109, 109)
-    assert (model.meta.b_cursor, model.meta.pub_cursor) == (108, 109)
-    assert [(p.ident, p.cursor, p.registered) for p in model.meta.positions] == [(2, 108, 107), (1, 107, 106)]
+    assert (world.clock, model.meta.route_tick, model.meta.failures_tick) == (4, 5, 5)
+    assert (model.meta.b_cursor, model.meta.pub_cursor) == (3, 4)
+    assert [(p.ident, p.cursor, p.registered) for p in model.meta.positions] == [(2, 4, 3), (1, 3, 2)]
 
     model.frame.iteration = 0
     model.do_a(0)
@@ -918,11 +956,11 @@ def self_check() -> None:
     assert world.main.values[66] == ([0, 200, 300, 400], 9, 2)
     assert all(world.aux.values[i] is None for i in (64, 66) if i < len(world.aux.values))
     assert all(world.flag.values[i] is None for i in (64, 66) if i < len(world.flag.values))
-    assert model.world.main.stamps[:2] == [(67, 120, 120), (65, 119, 119)]
-    assert (world.clock, model.meta.route_tick, model.meta.failures_tick) == (120, 118, 118)
-    assert (model.meta.b_cursor, model.meta.pub_cursor) == (117, 118)
-    assert [(b.tick, b.values) for b in model.meta.batches] == [(110, [0]), (115, [1])]
-    assert [(p.ident, p.cursor, p.registered) for p in model.meta.positions] == [(2, 117, 107), (1, 114, 106)]
+    assert model.world.main.stamps[:2] == [(67, 12, 12), (65, 12, 12)]
+    assert (world.clock, model.meta.route_tick, model.meta.failures_tick) == (12, 12, 12)
+    assert (model.meta.b_cursor, model.meta.pub_cursor) == (10, 11)
+    assert [(b.tick, b.values) for b in model.meta.batches] == [(7, [0]), (11, [1])]
+    assert [(p.ident, p.cursor, p.registered) for p in model.meta.positions] == [(2, 11, 3), (1, 10, 2)]
     assert model.frame.pending_a == (65, 0)
     assert model.frame.failed[-1] == (66, 0)
     assert model.frame.retry_b == (67, 0)

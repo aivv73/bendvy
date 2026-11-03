@@ -33,6 +33,6 @@ Term io_connected_clock_end_run(Env e, Term *f, IoWork *w) {
   return (Term)(uint64_t)elapsed;
 }
 static void __attribute__((constructor)) io_connected_clock_use(void) {
-  io_eff(CID(begin), io_connected_clock_begin_run, 0);
-  io_eff(CID(end), io_connected_clock_end_run, 0);
+  io_eff(CID(begin), io_connected_clock_begin_run);
+  io_eff(CID(end), io_connected_clock_end_run);
 }

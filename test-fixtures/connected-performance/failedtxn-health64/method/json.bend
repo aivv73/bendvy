@@ -4,7 +4,7 @@ type Value is Data:
   Null{}
   Boolean{value:Bool}
   Number{value:Nat}
-  Text{value:String}
+  JsonText{value:String}
   Array{values:List<&2,Value>,count:Nat}
   Object{fields:List<&2,Field>,count:Nat}
 type Field is Data:
@@ -22,7 +22,7 @@ def work(value:Value) -> Nat:
     case Null{}:1n
     case Boolean{_}:1n
     case Number{value}:2n+String.length(Nat.show(value))
-    case Text{value}:text_work(value)
+    case JsonText{value}:text_work(value)
     case Array{_,count}:count
     case Object{_,count}:count
 def values_work(values:List<&2,Value>,count:Nat) -> Nat:
@@ -95,7 +95,7 @@ def array_case(rest:List<&2,Task>,pieces:List<&2,String>,first:Bool,values:List<
     case False{},head <> tail:State{ValueTask{head} <> ArrayTask{tail,False{}} <> rest,"," <> pieces}
 def object_field(rest:List<&2,Task>,pieces:List<&2,String>,fields:List<&2,Field>,value:Field) -> State:
   match value:
-    case Field{key,value}:State{ValueTask{Text{key}} <> LiteralTask{":"} <> ValueTask{value} <> ObjectTask{fields,False{}} <> rest,pieces}
+    case Field{key,value}:State{ValueTask{JsonText{key}} <> LiteralTask{":"} <> ValueTask{value} <> ObjectTask{fields,False{}} <> rest,pieces}
 def object_case(rest:List<&2,Task>,pieces:List<&2,String>,first:Bool,fields:List<&2,Field>) -> State:
   match first fields:
     case _,[]:State{rest,"}" <> pieces}
@@ -114,7 +114,7 @@ def value_case(rest:List<&2,Task>,pieces:List<&2,String>,value:Value) -> State:
     case Null{}:State{rest,"null" <> pieces}
     case Boolean{value}:State{rest,bool_text(value) <> pieces}
     case Number{value}:State{RawTask{Nat.show(value)} <> rest,pieces}
-    case Text{value}:State{QuoteTask{value} <> rest,"\"" <> pieces}
+    case JsonText{value}:State{QuoteTask{value} <> rest,"\"" <> pieces}
     case Array{values,_}:State{ArrayTask{values,True{}} <> rest,"[" <> pieces}
     case Object{fields,_}:State{ObjectTask{fields,True{}} <> rest,"{" <> pieces}
 def task_case(rest:List<&2,Task>,pieces:List<&2,String>,value:Task) -> State:

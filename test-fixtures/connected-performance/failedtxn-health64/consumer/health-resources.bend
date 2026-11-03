@@ -25,7 +25,7 @@ def record(owner:Audit,text:String) -> Audit & Unit:
 def audit_view(slot:Service.Slot<Audit>) -> Service.Slot<Audit> & AuditView:
   match slot:
     case Service.Missing{}:(Service.Missing{},Missing{})
-    case Service.Ready{Recorded{+effects}}:(Service.Ready{Recorded{effects}},RecordedView{effects})
+    case Service.BendvyReady{Recorded{+effects}}:(Service.BendvyReady{Recorded{effects}},RecordedView{effects})
 def observed(ledger:T.HealthLedger,view:T.LedgerView,result:Service.Slot<Audit> & AuditView) -> Resources() & View:
   match result:
     case (slot,audit):(Product.Owner{ledger,slot},View{view,audit})
@@ -36,4 +36,4 @@ def observe(owner:Resources()) -> Resources() & View:
   match owner:
     case Product.Owner{ledger,slot}:ledger_observed(slot,Payload.health_ledger_get(ledger))
 def initial() -> Resources():
-  Product.Owner{T.HealthLedger{ANode{ANode{ALeaf{0},ALeaf{101}},ANode{ALeaf{102},ALeaf{103}}},4},Service.Ready{Recorded{[]}}}
+  Product.Owner{T.HealthLedger{ANode{ANode{ALeaf{0},ALeaf{101}},ANode{ALeaf{102},ALeaf{103}}},4},Service.BendvyReady{Recorded{[]}}}

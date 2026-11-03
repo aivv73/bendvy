@@ -29,9 +29,9 @@ def ledger(value:T.LedgerView) -> J.Value:
     case T.LedgerView{values,epoch}:J.object([J.Field{"totals",four(values)},J.Field{"epoch",number(epoch)}])
 def access(~V:Data,~project:V -> J.Value,value:Cmp.Access<V>) -> J.Value:
   match value:
-    case Cmp.MissingEntity{}:J.object([J.Field{"kind",J.Text{"Missing"}}])
-    case Cmp.ComponentAbsent{}:J.object([J.Field{"kind",J.Text{"Absent"}}])
-    case Cmp.Found{value}:J.object([J.Field{"kind",J.Text{"Found"}},J.Field{"value",project(value)}])
+    case Cmp.MissingEntity{}:J.object([J.Field{"kind",J.JsonText{"Missing"}}])
+    case Cmp.ComponentAbsent{}:J.object([J.Field{"kind",J.JsonText{"Absent"}}])
+    case Cmp.Found{value}:J.object([J.Field{"kind",J.JsonText{"Found"}},J.Field{"value",project(value)}])
 def maybe(~V:Data,~project:V -> J.Value,value:Maybe<&2,V>) -> J.Value:
   match value:
     case None{}:J.Null{}
@@ -56,7 +56,7 @@ def ordinals(values:List<&2,A.Entry>) -> List<&2,J.Value>:
     case A.Entry{_,ordinal} <> rest:J.Number{ordinal} <> ordinals(rest)
 def initialized(+actors:A.Actors) -> State:
   match actors:
-    case A.Actors{entries,_,_}:State{actors,[J.object([J.Field{"kind",J.Text{"SeedActors"}},J.Field{"actors",J.array(ordinals(entries))}])]}
+    case A.Actors{entries,_,_}:State{actors,[J.object([J.Field{"kind",J.JsonText{"SeedActors"}},J.Field{"actors",J.array(ordinals(entries))}])]}
 def start(reservations:List<&2,W.Reservation<T.HealthSchema>>) -> State:initialized(A.from_seed(reservations,A.empty()))
 def row(+state:State,value:IQ.ProjectedRow<T.HealthSchema,Logical.Value()>) -> J.Value:
   match value:

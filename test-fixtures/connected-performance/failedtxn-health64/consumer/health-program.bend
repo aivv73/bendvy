@@ -75,7 +75,7 @@ def phase_outcome(failed:Bool) -> String:
     case False{}:"Success"
 def phase_record_frame(frame:S.Frame,failed:Bool) -> S.Frame:
   match frame:
-    case S.Frame{first,second,+i,+phase,pending,retry,allFailed,calls,method}:S.Frame{first,second,i,phase,pending,retry,allFailed,calls,Method.append(method,J.object([J.Field{"kind",J.Text{"Phase"}},J.Field{"phase",Method.number(phase)},J.Field{"iteration",Capture.iteration(phase,i)},J.Field{"outcome",J.object([J.Field{"kind",J.Text{phase_outcome(failed)}}])}]))}
+    case S.Frame{first,second,+i,+phase,pending,retry,allFailed,calls,method}:S.Frame{first,second,i,phase,pending,retry,allFailed,calls,Method.append(method,J.object([J.Field{"kind",J.JsonText{"Phase"}},J.Field{"phase",Method.number(phase)},J.Field{"iteration",Capture.iteration(phase,i)},J.Field{"outcome",J.object([J.Field{"kind",J.JsonText{phase_outcome(failed)}}])}]))}
 def phase_record(value:S.Runtime(),failed:Bool) -> S.Runtime():
   match value:
     case (owners,S.Shared{meta,tick,+frame}):(owners,S.Shared{meta,tick,phase_record_frame(frame,failed)})
@@ -132,8 +132,8 @@ def loops(fuel:Nat,+iteration:U32,state:State) -> State:
     case 1n+rest:loops(rest,U32.add(iteration,1),step(iteration,state))
 def method_status(value:Status) -> J.Value:
   match value:
-    case Complete{}:J.object([J.Field{"kind",J.Text{"Complete"}}])
-    case Stopped{reason}:J.object([J.Field{"kind",J.Text{"Stopped"}},J.Field{"reason",J.Text{reason}}])
+    case Complete{}:J.object([J.Field{"kind",J.JsonText{"Complete"}}])
+    case Stopped{reason}:J.object([J.Field{"kind",J.JsonText{"Stopped"}},J.Field{"reason",J.JsonText{reason}}])
 def final_observer(world:F.World(),owners:S.Runtime(),status:J.Value) -> F.World() & (S.Runtime() & Method.State):CaptureState.final_runtime(world,owners,status)
 def final_returned(namespace:U32,boundaries:List<&2,Boundary.Boundary>,schedules:List<&2,String>,status:Status,value:EntryApp.Slot() & Method.State) -> State & Method.State:
   match value:

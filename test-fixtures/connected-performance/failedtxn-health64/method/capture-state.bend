@@ -50,7 +50,7 @@ def boundary(name:String,+frame:S.Frame,countA:U32,countB:U32,world:F.World()) -
       bind(~J.Value,~(F.World() & J.Value),world=>last=>
       bind(~J.Value,~(F.World() & J.Value),world=>retry=>
       bind(~List<&2,J.Value>,~(F.World() & J.Value),world=>all=>
-      (world,J.object([J.Field{"kind",J.Text{"Boundary"}},J.Field{"iteration",M.number(i)},J.Field{"phase",J.Text{name}},J.Field{"rows",J.array(M.rows(state,rows))},J.Field{"ledger",view_ledger(view)},J.Field{"pendingA",pending},J.Field{"latestFailed",last},J.Field{"retryB",retry},J.Field{"allFailed",J.array(all)},J.Field{"captures",M.capture_counts(countA,countB)}])),
+      (world,J.object([J.Field{"kind",J.JsonText{"Boundary"}},J.Field{"iteration",M.number(i)},J.Field{"phase",J.JsonText{name}},J.Field{"rows",J.array(M.rows(state,rows))},J.Field{"ledger",view_ledger(view)},J.Field{"pendingA",pending},J.Field{"latestFailed",last},J.Field{"retryB",retry},J.Field{"allFailed",J.array(all)},J.Field{"captures",M.capture_counts(countA,countB)}])),
       failed_all(state,handles,(world,[]))),optional(state,world,retry)),optional(state,world,Boundary.recent_go(handles,None{}))),optional(state,world,pending)),resource(world)),Logical.rows(world))
 def subject_tail() -> Type:Publications.Provider() & Dispose.Registry()
 def boundary_recorded(owners:S.Owned(),meta:L.Meta(),tick:Nat,frame:S.Frame,observed:F.World() & J.Value) -> F.World() & S.Runtime():
@@ -68,14 +68,14 @@ def boundary_runtime(name:String,world:F.World(),runtime:S.Runtime()) -> F.World
 def reverse_text(values:List<&2,String>,out:List<&2,J.Value>) -> List<&2,J.Value>:
   match values:
     case []:out
-    case value <> rest:reverse_text(rest,J.Text{value} <> out)
+    case value <> rest:reverse_text(rest,J.JsonText{value} <> out)
 def effects(value:R.AuditView) -> J.Value:
   match value:
-    case R.Missing{}:J.object([J.Field{"kind",J.Text{"MissingAudit"}}])
+    case R.Missing{}:J.object([J.Field{"kind",J.JsonText{"MissingAudit"}}])
     case R.RecordedView{values}:J.array(reverse_text(values,[]))
 def final_record(state:M.State,rows:Logical.Rows(),view:R.View,countA:U32,countB:U32,status:J.Value) -> J.Value:
   match view:
-    case R.View{ledger,audit}:J.object([J.Field{"kind",J.Text{"Final"}},J.Field{"rows",J.array(M.rows(state,rows))},J.Field{"ledger",M.ledger(ledger)},J.Field{"captures",M.capture_counts(countA,countB)},J.Field{"effects",effects(audit)},J.Field{"status",status}])
+    case R.View{ledger,audit}:J.object([J.Field{"kind",J.JsonText{"Final"}},J.Field{"rows",J.array(M.rows(state,rows))},J.Field{"ledger",M.ledger(ledger)},J.Field{"captures",M.capture_counts(countA,countB)},J.Field{"effects",effects(audit)},J.Field{"status",status}])
 def final(world:F.World(),state:M.State,countA:U32,countB:U32,status:J.Value) -> F.World() & J.Value:
   bind(~Logical.Rows(),~(F.World() & J.Value),world=>rows=>
   bind(~R.View,~(F.World() & J.Value),world=>view=>

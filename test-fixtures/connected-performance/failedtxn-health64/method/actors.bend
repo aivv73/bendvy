@@ -40,7 +40,7 @@ def raw_value(value:W.Handle<T.HealthSchema>) -> J.Value:
 def reference_found(raw:W.Handle<T.HealthSchema>,value:Maybe<&2,Nat>) -> J.Value:
   match value:
     case Some{ordinal}:J.Number{ordinal}
-    case None{}:J.object([J.Field{"kind",J.Text{"Unmapped"}},J.Field{"raw",raw_value(raw)}])
+    case None{}:J.object([J.Field{"kind",J.JsonText{"Unmapped"}},J.Field{"raw",raw_value(raw)}])
 def reference(value:Actors,+raw:W.Handle<T.HealthSchema>) -> J.Value:
   match value:
     case Actors{entries,_,_}:reference_found(raw,find(entries,raw))

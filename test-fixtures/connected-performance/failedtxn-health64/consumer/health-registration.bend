@@ -18,12 +18,12 @@ import ../../../../src/ecs/event-family-routing.bend as Route
 type Owners is Type:
   Owners{a:L.Instance(),b:L.Instance(),publications:Publications.Provider(),meta:L.Meta(),tick:Nat}
 type Registration is Type:
-  Ready{world:F.World(),owners:Owners}
+  HealthReady{world:F.World(),owners:Owners}
   Stopped{context:Family.Context(),stage:U32,a:Maybe<&1,L.Instance()>,reader:Maybe<&1,Reader.Provider()>,publications:Maybe<&1,Publications.Provider()>,local:Maybe<&1,L.State>}
 def access() -> List<&2,String>:Access.access()
 def b_registered(meta:L.Meta(),tick:Nat,a:L.Instance(),publications:Publications.Provider(),result:Local.Registered<T.HealthSchema,F.Store(),F.Resources(),E.event_type(),L.State,L.Args,Empty,L.Returned,L.runner>) -> Registration:
   match result:
-    case Local.Registered{world,b}:Ready{world,Owners{a,b,publications,meta,tick}}
+    case Local.Registered{world,b}:HealthReady{world,Owners{a,b,publications,meta,tick}}
     case Local.RegistrationRejected{world,local}:Stopped{Route.Runtime{world,meta,tick},4,Some{a},None{},Some{publications},Some{local}}
 def a_registered(meta:L.Meta(),tick:Nat,reader:Reader.Provider(),publications:Publications.Provider(),result:Local.Registered<T.HealthSchema,F.Store(),F.Resources(),E.event_type(),L.State,L.Args,Empty,L.Returned,L.runner>) -> Registration:
   match result:

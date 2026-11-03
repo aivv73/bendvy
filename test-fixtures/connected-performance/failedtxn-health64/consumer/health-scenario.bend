@@ -70,7 +70,7 @@ def optional_local(value:Maybe<&1,L.State>) -> String:
     case Some{owner}:"Some{" ++ text(~L.State,Render.local(owner)) ++ "}"
 def setup(method:Method.State,prefix:String,iterations:U32,first:W.Handle<T.HealthSchema>,second:W.Handle<T.HealthSchema>,value:Reg.Registration) -> Prepared:
   match value:
-    case Reg.Ready{world,owners}:dispose_registered(method,prefix,iterations,owners,first,second,Sys.register(~T.HealthSchema,~F.Store(),~F.Resources(),~E.event_type(),~List<&2,W.Handle<T.HealthSchema>>,~Empty,~Dispose.Output,~Dispose.runner,world,"FailedTxn/DisposeTransient",[Identity.key(~T.HealthSchema,~T.Vitals,F.main_identity()),Identity.key(~T.HealthSchema,~T.Armor,F.aux_identity()),Identity.key(~T.HealthSchema,~T.Tracked,F.flag_identity())]))
+    case Reg.HealthReady{world,owners}:dispose_registered(method,prefix,iterations,owners,first,second,Sys.register(~T.HealthSchema,~F.Store(),~F.Resources(),~E.event_type(),~List<&2,W.Handle<T.HealthSchema>>,~Empty,~Dispose.Output,~Dispose.runner,world,"FailedTxn/DisposeTransient",[Identity.key(~T.HealthSchema,~T.Vitals,F.main_identity()),Identity.key(~T.HealthSchema,~T.Armor,F.aux_identity()),Identity.key(~T.HealthSchema,~T.Tracked,F.flag_identity())]))
     case Reg.Stopped{context,stage,a,reader,pub,local}:PreparationFailed{[prefix ++ "RegistrationStopped{stage=" ++ U32.show(stage) ++ ";context={" ++ text(~Family.Context(),RT.context(context)) ++ "};a=" ++ optional_instance(a) ++ ";reader=" ++ optional_reader(reader) ++ ";publications=" ++ optional_publications(pub) ++ ";local=" ++ optional_local(local) ++ "}\n"]}
 def targets(prefix:String,iterations:U32,world:F.World(),+reservations:List<&2,W.Reservation<T.HealthSchema>>) -> Prepared:
   match reservations:
