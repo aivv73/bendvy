@@ -24,8 +24,8 @@ Ordinary component/captured queries, whole/field resource systems and resource
 Local systems select preserving completion instead. Performed writes, authored
 commands and Data events survive a returned body error; the original error
 remains and failed outputs are discarded. Commands still require an explicit
-barrier. Inverse journals are still built during execution. Reader,
-linked-cleanup and owned-event completion remain outside this port.
+barrier. Inverse journals are still built during execution. Linked-cleanup and
+owned-event completion remain outside this port.
 Historical qualification of the removed executor does not qualify those
 remaining requirements on this core.
 
@@ -33,6 +33,11 @@ remaining requirements on this core.
 authored spawn/cleanup commands on returned body errors. The original error remains
 and failed outputs are discarded; the next explicit barrier applies the retained
 commands in order. Direct transaction helpers retain rollback.
+
+[`ordinary-reader-system`](../../src/ecs/ordinary-reader-system.bend) retains
+performed writes, reservations, authored commands and events after a returned body
+error. Its failure result retains the original error and affine callback output.
+Reader acknowledgement and the after-success hook still run only on success.
 
 This completion boundary follows Bevy's
 [single-threaded executor](https://github.com/bevyengine/bevy/blob/ad678262ce53b5d142fe49ee5e08caff6f00ab60/crates/bevy_ecs/src/schedule/executor/single_threaded.rs#L132-L166),

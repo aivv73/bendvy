@@ -1,11 +1,18 @@
 {
   "basisGit": "728110b98",
   "currentBaseline": {
-    "coreCommit": "30f24c770f5c06f95e6cf30d579cf28aa733d3cd",
-    "policy": "Reader body effects remain transactional; failed stream acknowledgement is not committed. Registry records the captured entry tick on every executed outcome.",
+    "coreCommit": "51a76c929df325c6d227ed60a3e92cafad80fc34",
+    "policy": "Current Bend prediction preserves reader body writes, commands and publications on returned error. Failed stream acknowledgement and after-success ingestion remain uncommitted. Registry records the captured entry tick on every executed outcome. The sealer explicitly selects historical rollback only for the unchanged TS control.",
+    "completionTransition": {
+      "status": "Applied after complete independent prediction was frozen; sourcePins bind the actual preserving reader.",
+      "path": "src/ecs/ordinary-reader-system.bend",
+      "from": "Cmd.tx_finish",
+      "to": "Cmd.tx_finish_preserving",
+      "scope": "callback_returned completion only; stream commit and after-success control unchanged"
+    },
     "clockScope": "Existing 64-iteration scenario stays below 2^32: finite model uses integer logical ticks and renders complete epoch-zero timestamps. It does not model low-word wrap.",
     "modelPins": {
-      "operation_model.py": "4121d330ce7b33f05018fd406cfd04526ba372b4dcc5cc5e73b2ef4528113c40",
+      "operation_model.py": "4bece25ec54558aff03b70d425797a4b48ab40ab4e17c1bac68eefd4764c7340",
       "common_model.py": "cc8bd9482007013df4c22f2d2b19cb57710beaf5b672ae09d07abf4d8cea425f",
       "ts_model.py": "b4e97da2101cfbb86bb62e59afb982286f23e63bf6b3330c72000d1072d07d94"
     },
@@ -16,7 +23,7 @@
       "src/ecs/world.bend": "cd340bde674783e4e72609264f1399f796a27073479572fb78f6bde3ed636f5e",
       "src/ecs/event-notice-runtime.bend": "4e7fe1b45c9f5a5993f691581fc268508bfc2f72a62f092c548849667c683aa5",
       "src/ecs/ordinary-reader-stream-parameter.bend": "48645232674da4f208f31b4c64ec337bb90d5a1239f73bc088b730f87939c512",
-      "src/ecs/ordinary-reader-system.bend": "6f177f02fc8428f39ec25062654ec904e8c9b7148455d3e0cf7919f3e5c14432"
+      "src/ecs/ordinary-reader-system.bend": "d987ffa0b43f5f250c888afec68511c0a3525207932db21113c6fb390accfa82"
     }
   },
   "originalModelPath": "experiments/s-perf/canonical-api-v1/failedtxn-runtime-v1/diagnostics/matched-timing-v1/health-v1/model/",

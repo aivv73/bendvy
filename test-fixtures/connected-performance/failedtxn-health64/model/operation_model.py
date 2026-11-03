@@ -414,6 +414,7 @@ class Model:
     schedule_texts: list[str] = field(default_factory=list)
     spool: Path | None = None
     dispose_cursor: int | None = None
+    reader_completion: str = "preserve"
 
     def provider_text(self, pub: bool) -> str:
         ident = 2 if pub else 1
@@ -626,7 +627,7 @@ class Model:
             status = 1 if fail else 0
             err = "Some{7}" if fail else "None"
         before = self.provider_text(False)
-        if not fail and not prime:
+        if not prime and (not fail or self.reader_completion == "preserve"):
             self.world.pending.insert(0, "Raw")
             self.world.publish_event(2 * iteration + 1)
         if not fail:
@@ -651,13 +652,13 @@ class Model:
         if not prime:
             if fail:
                 self.frame.failed.append(reservation_key)
-                # Failure replays component/resource inverses, but preserves
-                # clock, request-side Audit, and other owners. Its allocation
-                # inverse abandons the new reservation without freeing it.
-                assert old_component is not None
-                self.world.main.restore(self.b_key[0], old_component, old_stamp)
-                self.world.ledger[0] -= 100
-                self.world.allocator.abandon(reservation_key)
+                # Only the historical rollback control replays inverses and
+                # abandons the reservation; clock, Audit and owners survive.
+                if self.reader_completion == "rollback":
+                    assert old_component is not None
+                    self.world.main.restore(self.b_key[0], old_component, old_stamp)
+                    self.world.ledger[0] -= 100
+                    self.world.allocator.abandon(reservation_key)
             else:
                 self.frame.retry_b = reservation_key
         # The caller uses the stream's captured values to form output text.
@@ -683,14 +684,17 @@ class Model:
 
     def do_barrier_spawns(self) -> None:
         self.world.enter_run()
-        # Each successful Tx prepends its reversed command buffer to the
+        # Each completed ordinary callback prepends its reversed buffer to the
         # global queue. W.drain_fifo recurses through the tail before applying
         # the head, so the pending list's order is reversed at application.
         pending = list(self.world.pending)
         self.world.pending.clear()
         # Retry B is at the pending head, but A's older command applies first.
-        keys = [self.frame.pending_a, self.frame.retry_b]
-        assert len(pending) == len(keys) == 2
+        keys = [self.frame.pending_a]
+        if self.reader_completion == "preserve":
+            keys.append(self.frame.failed[-1])
+        keys.append(self.frame.retry_b)
+        assert len(pending) == len(keys)
         for key in keys:
             assert key is not None
             self.world.allocator.activate(key)
@@ -748,7 +752,8 @@ def populate_seed(world: World, count: int = N) -> list[tuple[int, int]]:
     return reservations
 
 
-def setup_model(ns: int, count: int = N) -> tuple[World, list[tuple[int,int]], Model]:
+def setup_model(ns: int, count: int = N, reader_completion: str = "preserve") -> tuple[World, list[tuple[int,int]], Model]:
+    assert reader_completion in ("preserve", "rollback")
     w = World(ns)
     reservations = populate_seed(w, count)
     # Five public registrations, insertion newest first.
@@ -761,7 +766,8 @@ def setup_model(ns: int, count: int = N) -> tuple[World, list[tuple[int,int]], M
     # route cursor begins independently at zero.
     meta = Meta(failures_tick=w.clock)
     model = Model(w, meta, a_id, b_id, pub_id, dispose_id, 0, 0,
-                  reservations[0], reservations[1], Frame(reservations[0], reservations[1]))
+                  reservations[0], reservations[1], Frame(reservations[0], reservations[1]),
+                  reader_completion=reader_completion)
     return w, reservations, model
 
 
@@ -836,7 +842,7 @@ def write_state(prefix: str, model: Model, stream, *, boundaries: Path | None = 
     stream.write(";status=Complete}\n")
 
 
-def setup_output(count: int, iterations: int, ns: int, stream) -> tuple[Model, Path]:
+def setup_output(count: int, iterations: int, ns: int, stream, reader_completion: str = "preserve") -> tuple[Model, Path]:
     # Emit created, seedPending, and seedApplied from independent runtime state.
     empty = World(ns)
     stream.write(f"count={count};iterations={iterations};created={{{world_text(empty)}}}\n")
@@ -852,7 +858,7 @@ def setup_output(count: int, iterations: int, ns: int, stream) -> tuple[Model, P
     reservations = populate_seed(seed_applied, count)
     stream.write(f"seedApplied={{{world_text(seed_applied)}}}\n")
     # Registration has already happened in setup_model; preserve initial state.
-    _, reservations, model = setup_model(ns, count)
+    _, reservations, model = setup_model(ns, count, reader_completion)
     stream.write(f"registered={{{model.state_small()}}}\n")
     spool = Path(f"/tmp/failedtxn-oracle-ns-{ns}-boundaries.txt")
     if spool.exists():
@@ -885,7 +891,7 @@ class TeeHash:
         self.gz_file.close()
 
 
-def generate(outdir: Path, count: int = N, iterations: int = ITERATIONS) -> dict:
+def generate(outdir: Path, count: int = N, iterations: int = ITERATIONS, reader_completion: str = "preserve") -> dict:
     outdir.mkdir(parents=True, exist_ok=True)
     raw = outdir / "expected.stdout"
     gz = outdir / "expected.stdout.gz"
@@ -893,7 +899,7 @@ def generate(outdir: Path, count: int = N, iterations: int = ITERATIONS) -> dict
     try:
         for name, ns in (("warmup", 1), ("measured", 2)):
             tee.write(name + "={")
-            model, spool = setup_output(count, iterations, ns, tee)
+            model, spool = setup_output(count, iterations, ns, tee, reader_completion)
             for i in range(iterations):
                 do_iteration(model, i)
             write_state("final={", model, tee, boundaries=spool)
@@ -907,8 +913,9 @@ def generate(outdir: Path, count: int = N, iterations: int = ITERATIONS) -> dict
     return result
 
 
-def self_check() -> None:
-    world, reservations, model = setup_model(1, N)
+def self_check(reader_completion: str = "preserve") -> None:
+    world, reservations, model = setup_model(1, N, reader_completion)
+    preserving = reader_completion == "preserve"
     assert world.ns == 1
     assert world.clock == 1
     assert model.meta.route_tick == 0 and model.meta.failures_tick == 1
@@ -935,11 +942,10 @@ def self_check() -> None:
     assert world.ledger == [1, 101, 102, 103]
     assert world.audit == ['{"who":"A","iteration":0,"capture":1}']
     model.do_b(0, fail=True)
-    # Failed B performs both field-preserving writes and a Ledger write before
-    # failing, then restores the original Vitals/Ledger while its independent
-    # Audit service effect and capture update remain visible.
-    assert world.main.values[1] == ([1, 2, 3, 4], 9, 2)
-    assert world.ledger == [1, 101, 102, 103]
+    # Current ordinary completion retains body effects; the historical TS
+    # control independently selects rollback. Neither acknowledges failure.
+    assert world.main.values[1] == ([31 if preserving else 1, 2, 3, 4], 9, 2)
+    assert world.ledger == [101 if preserving else 1, 101, 102, 103]
     assert model.b_capture == 2
     assert world.audit[:2] == [
         '{"who":"B","iteration":0,"capture":2}',
@@ -947,8 +953,8 @@ def self_check() -> None:
     ]
     model.do_publication(2, 0)
     model.do_b(0, fail=False)
-    assert world.main.values[1] == ([31, 2, 3, 4], 9, 2)
-    assert world.ledger == [101, 101, 102, 103]
+    assert world.main.values[1] == ([61 if preserving else 31, 2, 3, 4], 9, 2)
+    assert world.ledger == [201 if preserving else 101, 101, 102, 103]
     assert model.b_capture == 3
     model.do_publication(4, 0)
     model.do_barrier_spawns()
@@ -956,16 +962,20 @@ def self_check() -> None:
     assert world.main.values[66] == ([0, 200, 300, 400], 9, 2)
     assert all(world.aux.values[i] is None for i in (64, 66) if i < len(world.aux.values))
     assert all(world.flag.values[i] is None for i in (64, 66) if i < len(world.flag.values))
-    assert model.world.main.stamps[:2] == [(67, 12, 12), (65, 12, 12)]
+    expected_stamps = [(67, 12, 12), (66, 12, 12), (65, 12, 12)] if preserving else [(67, 12, 12), (65, 12, 12)]
+    assert model.world.main.stamps[:len(expected_stamps)] == expected_stamps
     assert (world.clock, model.meta.route_tick, model.meta.failures_tick) == (12, 12, 12)
     assert (model.meta.b_cursor, model.meta.pub_cursor) == (10, 11)
-    assert [(b.tick, b.values) for b in model.meta.batches] == [(7, [0]), (11, [1])]
+    expected_batches = [(7, [0]), (8, [1]), (11, [1])] if preserving else [(7, [0]), (11, [1])]
+    assert [(b.tick, b.values) for b in model.meta.batches] == expected_batches
     assert [(p.ident, p.cursor, p.registered) for p in model.meta.positions] == [(2, 11, 3), (1, 10, 2)]
     assert model.frame.pending_a == (65, 0)
     assert model.frame.failed[-1] == (66, 0)
     assert model.frame.retry_b == (67, 0)
     assert world.allocator.is_live((65, 0)) and world.allocator.is_live((67, 0))
-    assert not world.allocator.is_live((66, 0))
+    assert world.allocator.is_live((66, 0)) == preserving
+    if preserving:
+        assert world.main.values[65] == ([0, 200, 300, 400], 9, 2)
     model.do_dispose()
     assert model.world.allocator.free[:2] == [67, 65]
 
@@ -990,7 +1000,8 @@ def main() -> int:
     ap.add_argument("--self-check", action="store_true")
     args = ap.parse_args()
     if args.self_check:
-        self_check()
+        for policy in ("preserve", "rollback"):
+            self_check(policy)
         print("independent model invariants: PASS")
         return 0
     result = generate(args.outdir, args.count, args.iterations)

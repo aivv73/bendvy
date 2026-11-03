@@ -58,7 +58,7 @@ and Data events after returned body errors in ordinary component queries,
 captured queries, whole/field resource systems and resource Local systems.
 The original error is returned and failed outputs are discarded. Deferred work
 still requires an explicit barrier. Explicit Compose and owned-Compose
-transactions keep rollback. Reader, linked-cleanup and owned-event
+transactions keep rollback. Linked-cleanup and owned-event
 completion policies have not been ported by this step. The ordinary paths still
 build inverse journals during execution; eliminating that allocation is separate.
 
@@ -66,6 +66,11 @@ Ordinary lifetime-scope systems also retain authored spawn/cleanup commands afte
 a returned body error. They return the original error and discard failed outputs;
 the retained work is applied only at a later explicit barrier. Direct transaction
 operations keep their chosen rollback semantics.
+
+Ordinary reader callbacks retain performed writes, reservations, authored commands
+and events on returned body errors. They return the original error and their
+affine callback output. Reader acknowledgement and the after-success hook remain
+success-only; retaining body effects does not acknowledge failed reads.
 
 ## Sequential execution, user amendment, 2026-10-31 UTC
 
