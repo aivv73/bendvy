@@ -53,14 +53,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.20.0'
-      - name: Install pinned Bend 2.0.37
+      - name: Install pinned Bend 2.0.39
         shell: bash
         run: |
-          archive="$RUNNER_TEMP/bend-2.0.37-linux-x64.tar.gz"
+          archive="$RUNNER_TEMP/bend-2.0.39-linux-x64.tar.gz"
           curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
-            https://github.com/bendlang/bend/releases/download/v2.0.37/bend-2.0.37-linux-x64.tar.gz \
+            https://github.com/bendlang/bend/releases/download/v2.0.39/bend-2.0.39-linux-x64.tar.gz \
             -o "$archive"
-          echo "84c32465a39bc9ac315eade23f470cb8db03153dc860f89564fcfec153c3e445  $archive" | sha256sum -c -
+          echo "6cf462fd8f70b094a4950ebb709a9c4ffd8f1d1189d9cedf1fd63cd5d041c7ab  $archive" | sha256sum -c -
           tar -xzf "$archive" -C "$RUNNER_TEMP"
           echo "BEND=$RUNNER_TEMP/bend/bin/bend" >> "$GITHUB_ENV"
           echo 'BEND_NO_TELEMETRY=1' >> "$GITHUB_ENV"
@@ -72,26 +72,4 @@ jobs:
       - name: Compile and exercise every runnable example
         env:
           BENDVY_EXAMPLE_NATIVE: '1'
-        run: |
-          bash examples/check.sh
-          source examples/common.sh
-          example_emit examples/query-systems/main.bend "$RUNNER_TEMP/query-systems.js"
-          example_node "$RUNNER_TEMP/query-systems.js"
-          example_emit examples/event-systems/main.bend "$RUNNER_TEMP/event-systems.js"
-          example_node "$RUNNER_TEMP/event-systems.js"
-          example_emit examples/ordinary-applications/app-a.bend "$RUNNER_TEMP/app-a.js"
-          example_node "$RUNNER_TEMP/app-a.js"
-          example_emit examples/ordinary-applications/app-b.bend "$RUNNER_TEMP/app-b.js"
-          example_node "$RUNNER_TEMP/app-b.js"
-          example_emit examples/ordinary-execution/main.bend "$RUNNER_TEMP/ordinary-execution.js"
-          example_node "$RUNNER_TEMP/ordinary-execution.js"
-          example_emit examples/system-composition/main.bend "$RUNNER_TEMP/system-composition.js"
-          example_node "$RUNNER_TEMP/system-composition.js"
-          example_emit examples/machine-systems/main.bend "$RUNNER_TEMP/machine-systems.js"
-          example_node "$RUNNER_TEMP/machine-systems.js"
-          example_emit examples/lifecycle-systems/main.bend "$RUNNER_TEMP/lifecycle-systems.js"
-          example_node "$RUNNER_TEMP/lifecycle-systems.js"
-          example_emit examples/captured-systems/main.bend "$RUNNER_TEMP/captured-systems.js"
-          example_node "$RUNNER_TEMP/captured-systems.js"
-          example_emit examples/system-persistence/main.bend "$RUNNER_TEMP/system-persistence.js"
-          example_node "$RUNNER_TEMP/system-persistence.js"
+        run: bash examples/check.sh

@@ -73,8 +73,9 @@ only when adopting or changing this optimization.
 
 ## Parity compiler identity
 
-Use the preserved `bend-2.0.35` selected by
-[installed configuration](../experiments/public-simulation/delivery-v1/installed-config.py),
-with its existing Base/resource inventory. The changing `bend` alias is not an
-identity pin. Read [identity details](reference/evidence-runner-details.md#parity-compiler-identity)
-when changing tool selection.
+The supported compiler is the latest released Bend, currently 2.0.39.
+CI pins that release and its archive checksum. Local source checks use the
+installed `bend` selected by [installed configuration](../scripts/installed-config.py).
+Record the actual binary hash and matching Base/resource inventory in execution
+evidence. Older compiler receipts retain their historical scope; they do not
+require production compatibility branches.

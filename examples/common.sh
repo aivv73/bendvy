@@ -12,7 +12,7 @@ if [[ ${BENDVY_EXAMPLE_LOCK_HELD:-0} != 1 ]]; then
   export BENDVY_EXAMPLE_LOCK_HELD=1
 fi
 example_emit() {
-  time "${example_cpu[@]}" "$BEND" "$1" -o "$2"
+  "${example_cpu[@]}" "$BEND" "$1" -o "$2"
 }
 example_node() {
   timeout --signal=KILL 30s "${example_cpu[@]}" "$NODE" "$@"

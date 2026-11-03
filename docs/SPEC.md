@@ -27,6 +27,27 @@ or Autoresearch merely because feature work has finished. The prior numeric goal
 are deferred research history; a future campaign needs agreed targets and budget.
 
 
+## Fast sequential baseline, user amendment, 2026-11-02
+
+Restore the genuinely fast core from commit
+`e3dbf4ad65e01260d81092e58ee044a043a94c8b`, rather than retaining the
+generalized replacement behind a sequential runner. The user explicitly
+requested this correction after the previous sequential return retained the
+replacement's overhead. Restore matching callers and remove the superseded
+execution path. Keep modern development infrastructure and preserved research
+evidence outside production execution.
+
+Port useful fixes individually when their behavior and cost are understood.
+The old baseline's transactional behavior does not establish the later
+nontransactional contracts below. Record such differences explicitly; neither
+the old game's success nor historical replacement evidence qualifies an
+unported contract. Use the actual Survivors game to check engine behavior and
+performance without changing gameplay to hide engine costs.
+
+This amendment supersedes the following amendment's prohibition on restoring
+the historical implementation. The remaining capability requirements guide
+selection of fixes; they do not require retaining the generalized substrate.
+
 ## Sequential execution, user amendment, 2026-10-31 UTC
 
 The user requests one sequential ordinary executor and a simpler structure.

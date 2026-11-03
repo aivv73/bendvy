@@ -1,5 +1,10 @@
 # Sequential ordinary execution
 
+Historical design of the generalized executor removed by the
+[fast baseline amendment](../SPEC.md#fast-sequential-baseline-user-amendment-2026-11-02).
+This document describes the previous implementation. Use the
+[current execution API](../reference/execution-api.md) for supported modules.
+
 The 2026-10-31 user decision replaces the execution mechanism while preserving
 modern ECS behavior. [SPEC](../SPEC.md#sequential-execution-user-amendment-2026-10-31-utc)
 defines the contract. Historical experiments do not qualify a changed executor.

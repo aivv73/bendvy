@@ -6,7 +6,6 @@ import ./trace-facts.bend as Facts
 def error(error:W.WorldError) -> String:
   match error:
     case W.MissingEntity{}:"MissingEntity"
-    case W.ReservationUnauthorized{}:"ReservationUnauthorized"
     case W.CapacityExceeded{}:"CapacityExceeded"
     case W.NamespaceExhausted{}:"NamespaceExhausted"
     case W.SystemIdExhausted{}:"SystemIdExhausted"
