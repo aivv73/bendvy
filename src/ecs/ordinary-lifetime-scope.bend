@@ -71,7 +71,7 @@ def cleanup_cap(~H:Type,~S:Data,~P:Type,ops:Ops<H,S,P>) -> Cap.Request<H,Sc.Scop
 # Accepted requests retain P in deferred work. At an explicit command barrier,
 # activation/populate precede membership assignment; the body does not see a live
 # entity merely because this request succeeded. Only immediate refusal promises
-# that payload result: a later failed system discards its Out and staged work,
+# that payload result: a later failed system discards its Out,
 # so placing rejected P inside Out does not make it a failed-system recovery API.
 def spawn(~H:Type,~S:Data,~P:Type,~ops:Ops<H,S,P>,owner:H,scope:Sc.Scope<S>,payload:P) -> H & Sc.SpawnResult<S,P>:
   Cap.owned_request(~H,~(Sc.Scope<S> & P),~Sc.SpawnResult<S,P>,~spawn_cap(~H,~S,~P,ops),owner,(scope,payload))
@@ -108,12 +108,12 @@ def returned(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,output:Out,re
     case T.Returned{world,T.Failure{error}}:Sys.Failed{world,error}
 def invoked(~S:Data,~C:Type,~R:Type,~E:Data,~Error:Data,~Out:Type,seen:T.Tx<W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,A.Notice<S,E>> & (T.Outcome<Error> & Out)) -> Sys.Outcome<W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,Error,Out>:
   match seen:
-    case (tx,(outcome,output)):returned(~S,~C,~R,~E,~Error,~Out,output,Cmd.tx_finish(~S,~A.Store<S,Sc.Store<S,C>>,~R,~A.Notice<S,E>,~Error,tx,outcome))
+    case (tx,(outcome,output)):returned(~S,~C,~R,~E,~Error,~Out,output,Cmd.tx_finish_preserving(~S,~A.Store<S,Sc.Store<S,C>>,~R,~A.Notice<S,E>,~Error,tx,outcome))
 # Execute one body with lifetime capabilities inside an ordinary transaction.
 # Threads World through transaction finish: success returns Out; failure returns
 # World/error and discards Out, including any affine payload stored only there.
-# Failed staged spawns/cleanup are not published. Successful completion still
-# leaves structural work pending until the caller applies an explicit barrier.
+# Authored spawns/cleanup remain pending on either returned outcome until the
+# caller applies an explicit barrier.
 # Host IO and arbitrary trusted callback effects are not made reversible here.
 def runner(~S:Data,~C:Type,~R:Type,~E:Data,~P:Type,~populate:W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>> -> W.Handle<S> -> P -> W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,~clear:C -> W.Handle<S> -> C & List<&2,A.Notice<S,E>>,~record:W.Handle<S> -> A.Notice<S,E>,~declarations:List<&2,Rel.Declaration<S>>,~Args:Type,~Error:Data,~Out:Type,~body:@-H:Type -> @-ops:Ops<H,S,P> -> Args -> H -> H & (T.Outcome<Error> & Out),world:W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,args:Args) -> Sys.Outcome<W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,Error,Out>:
   invoked(~S,~C,~R,~E,~Error,~Out,body(T.Tx<W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,A.Notice<S,E>>,provide(~S,~C,~R,~E,~P,~populate,~clear,~record,~declarations),args,T.begin(~W.World<S,A.Store<S,Sc.Store<S,C>>,R,A.Notice<S,E>>,~A.Notice<S,E>,world)))

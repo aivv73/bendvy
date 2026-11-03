@@ -1,5 +1,6 @@
 import Base
 import ../../../src/ecs/world.bend as W
+import ../../../src/ecs/entity-key.bend as K
 import ../../../src/ecs/relation-commands.bend as A
 import ../../../src/ecs/relation-types.bend as G
 import ../../../src/ecs/lifetime-scope.bend as Sc
@@ -10,7 +11,7 @@ import ../../../src/ecs/ordinary-query-observable.bend as Q
 import ../../../src/ecs/compose.bend as Compose
 import ../../../src/ecs/capabilities.bend as Cap
 import ../../../src/ecs/component.bend as Cmp
-import ../ordinary-v1/fixture.bend as Values
+import ./payload-view.bend as Values
 import ./fixture.bend as F
 def Store(~S:Data) -> Type:
   A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>
@@ -66,19 +67,19 @@ def forward_chosen(same:Bool,source:U32,target:U32,acc:List<&2,EdgePair>) -> Lis
 def forward(~S:Data,edges:List<&2,G.Edge<S>>,+key:U32,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
   match edges:
     case []:acc
-    case G.Edge{G.Descriptor{id,_,_,_},source,target} <> rest:forward(~S,rest,key,forward_chosen(U32.is_eq(key,id),source,target,acc))
-def source_pairs(+target:U32,sources:List<&2,U32>,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
+    case G.Edge{G.Descriptor{id,_,_,_},source,target} <> rest:forward(~S,rest,key,forward_chosen(U32.is_eq(key,id),K.index(source),K.index(target),acc))
+def source_pairs(+target:U32,sources:List<&2,K.Key>,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
   match sources:
     case []:acc
-    case source <> rest:source_pairs(target,rest,pair_insert(EdgePair{target,source},acc))
-def inverse_chosen(same:Bool,target:U32,sources:List<&2,U32>,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
+    case source <> rest:source_pairs(target,rest,pair_insert(EdgePair{target,K.index(source)},acc))
+def inverse_chosen(same:Bool,target:U32,sources:List<&2,K.Key>,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
   match same:
     case True{}:source_pairs(target,sources,acc)
     case False{}:acc
 def inverse(~S:Data,items:List<&2,G.Inverse<S>>,+key:U32,acc:List<&2,EdgePair>) -> List<&2,EdgePair>:
   match items:
     case []:acc
-    case G.Inverse{G.Descriptor{id,_,_,_},target,sources} <> rest:inverse(~S,rest,key,inverse_chosen(U32.is_eq(key,id),target,sources,acc))
+    case G.Inverse{G.Descriptor{id,_,_,_},target,sources} <> rest:inverse(~S,rest,key,inverse_chosen(U32.is_eq(key,id),K.index(target),sources,acc))
 def graph_text(~S:Data,graph:G.Graph<S>) -> String:
   match graph:
     case G.Graph{+edges,+inverses}:
@@ -92,7 +93,7 @@ def count(~S:Data,events:List<&2,A.Notice<S,U32>>,acc:Nat) -> Nat:
     case _ <> rest:count(~S,rest,1n+acc)
 def notice(~S:Data,value:A.Notice<S,U32>,removed:List<&2,U32>,despawned:List<&2,U32>) -> List<&2,U32> & List<&2,U32>:
   match value:
-    case A.ComponentRemoved{id}:(number_insert(id,removed),despawned)
+    case A.ComponentRemoved{id}:(number_insert(K.index(id),removed),despawned)
     case A.Original{id}:(removed,number_insert(id,despawned))
     case _:(removed,despawned)
 def noticed(~S:Data,value:A.Notice<S,U32>,seen:List<&2,U32> & List<&2,U32>) -> List<&2,U32> & List<&2,U32>:
@@ -112,12 +113,12 @@ def row_access(id:U32,value:Cmp.Access<List<&2,U32>>) -> String:
     case _:"UnexpectedMissingPayload"
 def row_text(~S:Data,row:IQ.ProjectedRow<S,Cmp.Access<List<&2,U32>>>) -> String:
   match row:
-    case IQ.ProjectedRow{W.Handle{_,id},values}:row_access(id,values)
+    case IQ.ProjectedRow{W.Handle{_,id},values}:row_access(K.index(id),values)
 def rows_ready(~S:Data,seen:Frame(~S) & List<&2,IQ.ProjectedRow<S,Cmp.Access<List<&2,U32>>>>) -> World(~S) & String:
   match seen:
     case (I.Frame{world,_},rows):(world,compact(~IQ.ProjectedRow<S,Cmp.Access<List<&2,U32>>>,~row_text(~S),rows))
 def rows(~S:Data,world:World(~S)) -> World(~S) & String:
-  rows_ready(~S,IQ.each_composed(~Frame(~S),~S,~Cmp.Access<List<&2,U32>>,~Q.inspect_query(~S,~A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,~Unit,~A.Notice<S,U32>,~Compose.Frame<S,A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,Unit,A.Notice<S,U32>>,~Cap.Read<Compose.Frame<S,A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,Unit,A.Notice<S,U32>>,List<&2,U32>>,~Cmp.Access<List<&2,U32>>,~F.query(~S)),I.Frame{world,0}))
+  rows_ready(~S,IQ.each_composed(~Frame(~S),~S,~Cmp.Access<List<&2,U32>>,~Q.inspect_query(~S,~A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,~Unit,~A.Notice<S,U32>,~Compose.Frame<S,A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,Unit,A.Notice<S,U32>>,~Cap.Read<Compose.Frame<S,A.Store<S,Sc.Store<S,Col.Column<S,Values.Payload>>>,Unit,A.Notice<S,U32>>,List<&2,U32>>,~Cmp.Access<List<&2,U32>>,~F.query(~S)),I.Frame{world,None{}}))
 def observed_events(~S:Data,head:String,rowtext:String,graph:String,cursor:Nat,status:String,seen:World(~S) & List<&2,A.Notice<S,U32>>) -> State<S> & String:
   match seen:
     case (world,+events):(State{world,count(~S,events,0n),status},head ++ "\"rows\":" ++ rowtext ++ "," ++ graph ++ notices_text(notices(~S,events,cursor,[],[])) ++ "}")

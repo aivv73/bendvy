@@ -4,6 +4,25 @@
 
 Remaining-core specification: #37.
 
+## Current sequential completion
+
+The fast sequential core retains authored spawn/cleanup work when an
+`ordinary-lifetime-scope` body returns an error. Completion returns that error;
+an explicit barrier applies the pending commands in authored order. Explicit
+`Cmd.tx_finish` transactions retain rollback, including the `AbortScoped` control.
+
+The existing `feature-timing-v1/main.bend` consumer observes this boundary in two
+schemas. In its `linked-failure` case, the `failed-cleanup` checkpoint remains
+before publication. The first following barrier applies the retained cleanup,
+leaving entities 3 and 6, clearing relations to removed entities, and publishing
+removal/despawn notices for 1, 2, 4 and 5. The subsequent cleanup barriers emit no
+duplicate notices. Relative to the preserved historical oracle, only `spawned`,
+`pending-cleanup` and `cleaned` change in each schema. All other records, including
+the explicit aborted transaction, keep their original complete observations.
+
+The historical oracle files and TypeScript reference retain their original
+transactional scope. They do not define the current returned-error policy.
+
 ## What to build
 
 A scene-style lifetime scope owns a group of spawned entities and queues cleanup without deleting persistent entities.

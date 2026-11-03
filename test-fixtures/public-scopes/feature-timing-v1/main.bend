@@ -1,5 +1,6 @@
 import Base
 import ../../../src/ecs/world.bend as W
+import ../../../src/ecs/entity-key.bend as K
 import ../../../src/ecs/world-io.bend as WI
 import ../../../src/ecs/column.bend as Col
 import ../../../src/ecs/relation-commands.bend as A
@@ -16,7 +17,7 @@ import ../../../src/ecs/ordinary-component-despawn.bend as Clear
 import ./payload-view.bend as V
 import ./fixture.bend as F
 import ./observer.bend as O
-import ../ordinary-v1/fixture.bend as Values
+import ./payload-view.bend as Values
 
 type Alpha is Data:
   Alpha{}
@@ -49,11 +50,11 @@ def finish(~S:Data,tx:Tx(~S),outcome:T.Outcome<Unit>) -> O.World(~S):
 def plain_returned(~S:Data,seen:Tx(~S) & W.Reservation<S>) -> Tx(~S) & W.Handle<S>:
   match seen:
     case (tx,W.Reserved{handle}):(tx,handle)
-    case (tx,_):(tx,W.Handle{0,0})
+    case (tx,_):(tx,W.Handle{0,K.EntityKey{0,0}})
 def scoped_returned(~S:Data,seen:Tx(~S) & Sc.SpawnResult<S,Values.Payload>) -> Tx(~S) & W.Handle<S>:
   match seen:
     case (tx,Sc.Spawned{handle}):(tx,handle)
-    case (tx,_):(tx,W.Handle{0,0})
+    case (tx,_):(tx,W.Handle{0,K.EntityKey{0,0}})
 def plain(~S:Data,tx:Tx(~S),id:U32) -> Tx(~S) & W.Handle<S>:
   plain_returned(~S,Cmd.tx_spawn(~S,~O.Store(~S),~Unit,~A.Notice<S,U32>,~Values.Payload,~F.populate_world(~S),tx,Values.payload(id)))
 def scoped(~S:Data,tx:Tx(~S),scope:Sc.Scope<S>,id:U32) -> Tx(~S) & W.Handle<S>:

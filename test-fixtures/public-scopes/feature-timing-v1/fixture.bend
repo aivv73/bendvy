@@ -21,7 +21,7 @@ import ../../../src/ecs/persistence-declaration.bend as Persist
 import ../../../src/ecs/ordinary-schema-provision.bend as Prov
 import ../../../src/ecs/relation-commands.bend as A
 import ../../../src/ecs/relation-types.bend as G
-import ../ordinary-v1/fixture.bend as Values
+import ./payload-view.bend as Values
 import ./payload-view.bend as V
 def declaration(~S:Data) -> Identity.Declaration<S,Values.Payload>:
   Identity.component(~S,~Values.Payload,"Payload")

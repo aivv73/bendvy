@@ -24,10 +24,15 @@ Ordinary component/captured queries, whole/field resource systems and resource
 Local systems select preserving completion instead. Performed writes, authored
 commands and Data events survive a returned body error; the original error
 remains and failed outputs are discarded. Commands still require an explicit
-barrier. Inverse journals are still built during execution. Reader, lifetime,
+barrier. Inverse journals are still built during execution. Reader,
 linked-cleanup and owned-event completion remain outside this port.
 Historical qualification of the removed executor does not qualify those
 remaining requirements on this core.
+
+[`ordinary-lifetime-scope`](../../src/ecs/ordinary-lifetime-scope.bend) also retains
+authored spawn/cleanup commands on returned body errors. The original error remains
+and failed outputs are discarded; the next explicit barrier applies the retained
+commands in order. Direct transaction helpers retain rollback.
 
 This completion boundary follows Bevy's
 [single-threaded executor](https://github.com/bevyengine/bevy/blob/ad678262ce53b5d142fe49ee5e08caff6f00ab60/crates/bevy_ecs/src/schedule/executor/single_threaded.rs#L132-L166),
